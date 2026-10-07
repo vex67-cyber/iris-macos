@@ -105,6 +105,16 @@ public extension View {
         }
     }
 
+    /// `menuIndicator` 是 macOS 12+。
+    @ViewBuilder
+    func irisMenuIndicatorHidden() -> some View {
+        if #available(macOS 12.0, *) {
+            self.menuIndicator(.hidden)
+        } else {
+            self
+        }
+    }
+
     /// 主按钮：新系统用系统样式，老系统用自带样式兜底。
     @ViewBuilder
     func irisProminentButton() -> some View {

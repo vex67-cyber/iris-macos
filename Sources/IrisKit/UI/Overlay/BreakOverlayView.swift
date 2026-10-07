@@ -57,7 +57,7 @@ public struct BreakOverlayView: View {
             .padding(.horizontal, 44)
             .padding(.top, 52)
         }
-        .overlay(alignment: .bottomLeading) { creditLabel }
+        .irisOverlay(alignment: .bottomLeading) { creditLabel }
         .preferredColorScheme(.dark)
         .onAppear {
             startTipRotation()

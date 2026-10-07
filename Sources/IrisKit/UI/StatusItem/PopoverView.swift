@@ -320,7 +320,7 @@ public struct PopoverView: View {
                     .contentShape(Rectangle())
             }
             .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
+            .irisMenuIndicatorHidden()
             .fixedSize()
             .help(L10n.s("暂停 / 恢复", "Pause / resume"))
 

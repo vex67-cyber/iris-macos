@@ -4,7 +4,7 @@
 
 > Give your eyes a moment.
 
-A native macOS break reminder built with SwiftUI and AppKit. No third-party dependencies; no network calls except for the optional wallpapers.
+A native macOS break reminder built with SwiftUI and AppKit. It pulls in no third-party libraries — only system frameworks — and makes no network calls except for the optional wallpapers.
 
 ```
 Every 20 minutes of screen time, look at something 20 feet away for at least 20 seconds.
