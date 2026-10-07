@@ -1,0 +1,9 @@
+.build/
+dist/
+snapshots/
+Resources/AppIcon.icns
+.DS_Store
+*.xcodeproj
+*.xcworkspace
+DerivedData/
+.swiftpm/
