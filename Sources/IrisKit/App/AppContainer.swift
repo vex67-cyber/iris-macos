@@ -37,7 +37,7 @@ public enum SettingsPane: String, CaseIterable, Identifiable {
 
     public var tint: Color {
         switch self {
-        case .general: return Color(nsColor: .systemGray)
+        case .general: return IrisCompat.color(.systemGray)
         case .breaks: return IrisPalette.teal
         case .wallpaper: return IrisPalette.aqua
         case .sound: return IrisPalette.violet

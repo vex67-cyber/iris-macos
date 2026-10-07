@@ -179,7 +179,7 @@ public final class SystemMonitor: ObservableObject, SystemStatusProviding {
 
         for device in devices where device != 0 {
             var running: UInt32 = 0
-            var runningSize = UInt32(MemoryLayout<UInt32>.size)
+            let runningSize = UInt32(MemoryLayout<UInt32>.size)
             var runningAddress = CMIOObjectPropertyAddress(
                 mSelector: CMIOObjectPropertySelector(kCMIODevicePropertyDeviceIsRunningSomewhere),
                 mScope: CMIOObjectPropertyScope(kCMIOObjectPropertyScopeGlobal),

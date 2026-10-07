@@ -36,6 +36,20 @@ public enum IrisCompat {
         symbolCache[preferred] = result
         return result
     }
+
+    /// `Color(nsColor:)` 是 macOS 12+，11 上按 sRGB 分量自己转一次。
+    /// 用在品牌配色这种固定色上，动态外观的差异可以忽略。
+    public static func color(_ nsColor: NSColor) -> Color {
+        if #available(macOS 12.0, *) {
+            return Color(nsColor: nsColor)
+        }
+        guard let rgb = nsColor.usingColorSpace(.sRGB) else { return .gray }
+        return Color(.sRGB,
+                     red: Double(rgb.redComponent),
+                     green: Double(rgb.greenComponent),
+                     blue: Double(rgb.blueComponent),
+                     opacity: Double(rgb.alphaComponent))
+    }
 }
 
 // MARK: - NSApplication
