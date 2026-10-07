@@ -185,6 +185,15 @@ swift build --sdk /Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk
 
 ---
 
+## Windows 版本？
+
+目前还没有。但仓库里备好了一份**完整的移植规格书**：
+
+- [`docs/windows-port-spec.md`](docs/windows-port-spec.md) —— 行为规格、平台 API 映射、UI 规格、设计 token、验收清单、工作量估算
+- [`port/windows/`](port/windows/) —— **C# 调度器参考实现 + 20 个等价单元测试**，可直接拷进 .NET 工程
+
+任何人在 Windows 上用 .NET（WPF/WinUI）照着实现，即可 1:1 还原行为。
+
 ## 设计参考
 
 功能与交互参考了这些产品的成功经验：
