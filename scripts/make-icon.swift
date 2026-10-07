@@ -42,9 +42,36 @@ func color(_ r: CGFloat, _ g: CGFloat, _ b: CGFloat, _ a: CGFloat = 1) -> CGColo
     CGColor(red: r, green: g, blue: b, alpha: a)
 }
 
+func hex(_ v: Int, _ a: CGFloat = 1) -> CGColor {
+    color(CGFloat((v >> 16) & 0xFF) / 255,
+          CGFloat((v >> 8) & 0xFF) / 255,
+          CGFloat(v & 0xFF) / 255, a)
+}
+
+/// 把文字转成路径：这样数字和圆环、圆点可以共用同一套填色逻辑。
+func glyphPath(_ string: String, font: NSFont) -> CGPath {
+    let attributed = NSAttributedString(string: string, attributes: [.font: font])
+    let line = CTLineCreateWithAttributedString(attributed)
+    let path = CGMutablePath()
+    guard let runs = CTLineGetGlyphRuns(line) as? [CTRun] else { return path }
+    for run in runs {
+        let count = CTRunGetGlyphCount(run)
+        var glyphs = [CGGlyph](repeating: 0, count: count)
+        var positions = [CGPoint](repeating: .zero, count: count)
+        CTRunGetGlyphs(run, CFRangeMake(0, count), &glyphs)
+        CTRunGetPositions(run, CFRangeMake(0, count), &positions)
+        for i in 0..<count {
+            guard let g = CTFontCreatePathForGlyph(font, glyphs[i], nil) else { continue }
+            path.addPath(g, transform: CGAffineTransform(translationX: positions[i].x,
+                                                         y: positions[i].y))
+        }
+    }
+    return path
+}
+
 // MARK: - 绘制
 
-func drawIcon(size: CGFloat) -> NSBitmapImageRep {
+func drawIcon(size: CGFloat, compact: Bool = false) -> NSBitmapImageRep {
     let pixels = Int(size)
     guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil,
                                      pixelsWide: pixels, pixelsHigh: pixels,
@@ -66,91 +93,80 @@ func drawIcon(size: CGFloat) -> NSBitmapImageRep {
     let content = CGRect(x: 100 * s, y: 100 * s, width: 824 * s, height: 824 * s)
     let shape = superellipsePath(in: content)
 
-    // ── 1. 底部渐变（明目青 → 天蓝 → 靛蓝）
+    // ── 1. 底色：靛蓝 → 紫（左上 → 右下）
     ctx.saveGState()
     ctx.addPath(shape)
     ctx.clip()
     let base = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
-                          colors: [color(0.18, 0.86, 0.74),
-                                   color(0.17, 0.62, 0.98),
-                                   color(0.40, 0.42, 0.96)] as CFArray,
-                          locations: [0.0, 0.52, 1.0])!
+                          colors: [hex(0x7C8CF8), hex(0xA97CF5)] as CFArray,
+                          locations: [0, 1])!
     ctx.drawLinearGradient(base,
                            start: CGPoint(x: content.minX, y: content.maxY),
                            end: CGPoint(x: content.maxX, y: content.minY),
                            options: [])
-
-    // ── 2. 顶部柔光（让整块"玻璃"有厚度）
-    let highlight = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
-                               colors: [color(1, 1, 1, 0.30), color(1, 1, 1, 0)] as CFArray,
-                               locations: [0, 1])!
-    ctx.drawRadialGradient(highlight,
-                           startCenter: CGPoint(x: content.midX, y: content.maxY),
-                           startRadius: 0,
-                           endCenter: CGPoint(x: content.midX, y: content.maxY),
-                           endRadius: 640 * s,
-                           options: [])
-
-    // ── 3. 底部内阴影（体积感）
-    let vignette = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
-                              colors: [color(0, 0, 0, 0), color(0.05, 0.10, 0.35, 0.22)] as CFArray,
-                              locations: [0, 1])!
-    ctx.drawRadialGradient(vignette,
-                           startCenter: CGPoint(x: content.midX, y: content.midY),
-                           startRadius: 120 * s,
-                           endCenter: CGPoint(x: content.midX, y: content.midY),
-                           endRadius: 700 * s,
-                           options: [])
     ctx.restoreGState()
 
-    // ── 4. 眼睛
-    let cx = content.midX
-    let cy = content.midY
-    let halfW = 262 * s
-    let bulge = 208 * s
-
-    let eye = CGMutablePath()
-    eye.move(to: CGPoint(x: cx - halfW, y: cy))
-    eye.addCurve(to: CGPoint(x: cx + halfW, y: cy),
-                 control1: CGPoint(x: cx - 96 * s, y: cy + bulge),
-                 control2: CGPoint(x: cx + 96 * s, y: cy + bulge))
-    eye.addCurve(to: CGPoint(x: cx - halfW, y: cy),
-                 control1: CGPoint(x: cx + 96 * s, y: cy - bulge),
-                 control2: CGPoint(x: cx - 96 * s, y: cy - bulge))
-    eye.closeSubpath()
-
-    ctx.setLineWidth(30 * s)
-    ctx.setLineJoin(.round)
-    ctx.setLineCap(.round)
-    ctx.setStrokeColor(color(1, 1, 1, 0.96))
-    ctx.addPath(eye)
-    ctx.strokePath()
-
-    // 虹膜：一圈淡淡的白边 + 深色渐变，让眼睛有"神"
-    let irisRadius = 112 * s
-    let irisRect = CGRect(x: cx - irisRadius, y: cy - irisRadius,
-                          width: irisRadius * 2, height: irisRadius * 2)
+    // ── 2.「20」：0 画成环 + 点，也就是一只眼睛
+    //     沿用设计稿坐标（1024），这里整体缩放。
     ctx.saveGState()
-    ctx.addEllipse(in: irisRect)
-    ctx.clip()
-    let iris = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
-                          colors: [color(0.06, 0.16, 0.28),
-                                   color(0.10, 0.26, 0.55),
-                                   color(0.24, 0.42, 0.85)] as CFArray,
-                          locations: [0, 0.6, 1])!
-    ctx.drawRadialGradient(iris,
-                           startCenter: CGPoint(x: cx - irisRadius * 0.3, y: cy + irisRadius * 0.35),
-                           startRadius: 0,
-                           endCenter: CGPoint(x: cx, y: cy),
-                           endRadius: irisRadius * 1.25,
-                           options: [])
+    ctx.scaleBy(x: s, y: s)
+    drawTwenty(ctx, CGRect(x: 100, y: 100, width: 824, height: 824), compact: compact)
     ctx.restoreGState()
-
-    // 高光点
-    ctx.setFillColor(color(1, 1, 1, 0.92))
-    ctx.fillEllipse(in: CGRect(x: cx - 62 * s, y: cy + 20 * s, width: 58 * s, height: 58 * s))
 
     return rep
+}
+
+/// 「20」字标。参数是 1024 画布下的设计稿坐标。
+///
+/// `compact` 是给 16/32px 用的：笔画加粗、字号加大、整组略微放大，
+/// 否则缩到 16px 会糊成一团（Finder 列表视图用的就是这个尺寸）。
+func drawTwenty(_ ctx: CGContext, _ content: CGRect, compact: Bool = false) {
+    let ringRadius: CGFloat = 165
+    let ringWidth: CGFloat = compact ? 92 : 72
+    let dotRadius: CGFloat = compact ? 54 : 48
+    let gap: CGFloat = 58
+    let groupScale: CGFloat = compact ? 1.16 : 1.0
+
+    let font = NSFont.systemFont(ofSize: compact ? 470 : 430,
+                                 weight: compact ? .bold : .semibold)
+    let two = glyphPath("2", font: font)
+    let box = two.boundingBoxOfPath
+
+    let outer = ringRadius + ringWidth / 2
+    let ringCX = content.midX + outer / 2 + 10
+    let ringCY = content.midY
+
+    // 数字右缘贴着圆环外缘，留一个 gap
+    let twoX = ringCX - outer - gap - box.width - box.minX
+    let twoY = content.midY - box.height / 2 - box.minY
+
+    // 按整组包围盒做光学居中
+    let dx = content.midX - ((twoX + box.minX) + (ringCX + outer)) / 2
+
+    let white = color(1, 1, 1, 0.97)
+    ctx.setFillColor(white)
+
+    ctx.saveGState()
+    if groupScale != 1 {
+        ctx.translateBy(x: content.midX, y: content.midY)
+        ctx.scaleBy(x: groupScale, y: groupScale)
+        ctx.translateBy(x: -content.midX, y: -content.midY)
+    }
+    ctx.translateBy(x: dx, y: 0)
+    let placed = CGMutablePath()
+    placed.addPath(two, transform: CGAffineTransform(translationX: twoX, y: twoY))
+    ctx.addPath(placed)
+    ctx.fillPath()
+
+    let ringRect = CGRect(x: ringCX - ringRadius, y: ringCY - ringRadius,
+                          width: ringRadius * 2, height: ringRadius * 2)
+    ctx.setStrokeColor(white)
+    ctx.setLineWidth(ringWidth)
+    ctx.strokeEllipse(in: ringRect)
+
+    ctx.fillEllipse(in: CGRect(x: ringCX - dotRadius, y: ringCY - dotRadius,
+                               width: dotRadius * 2, height: dotRadius * 2))
+    ctx.restoreGState()
 }
 
 func writePNG(_ rep: NSBitmapImageRep, to url: URL) {
@@ -184,6 +200,9 @@ for variant in variants {
     let url = outputDir.appendingPathComponent("\(variant.name).png")
     if variant.pixels == 1024 {
         writePNG(master, to: url)
+    } else if variant.pixels <= 32 {
+        // 16/32px 直接按紧凑版重画，而不是把 1024 缩下来
+        writePNG(drawIcon(size: variant.pixels, compact: true), to: url)
     } else {
         let target = Int(variant.pixels)
         guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil,

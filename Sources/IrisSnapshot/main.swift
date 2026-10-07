@@ -230,6 +230,19 @@ snapshot("dev-controls", size: CGSize(width: 420, height: 260)) {
     .background(SnapshotBackground(dark: false))
 }
 
+// 品牌标记自检：各尺寸下的 AppMark 应该和 Dock 里的图标长得一样
+snapshot("dev-appmark", size: CGSize(width: 470, height: 170)) {
+    HStack(alignment: .center, spacing: 18) {
+        AppMark(size: 96)
+        AppMark(size: 68)
+        AppMark(size: 40)
+        AppMark(size: 22)
+        AppMark(size: 16)
+    }
+    .padding(24)
+    .background(SnapshotBackground(dark: false))
+}
+
 // 进度环的"部分进度"状态（验证 GPU 环的弧长与方向）
 let partialContext = OverlayContext(kind: .micro,
                                     startsAt: Date().addingTimeInterval(-14),

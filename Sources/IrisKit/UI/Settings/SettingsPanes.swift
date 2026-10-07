@@ -830,7 +830,7 @@ struct AboutPane: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            AppMark(size: 76, glyph: "eye")
+            AppMark(size: 76)
             Text(L10n.s("明目", "Iris"))
                 .font(.system(size: 21, weight: .semibold))
             Text(L10n.s("让眼睛，歇一会儿。", "Give your eyes a moment."))

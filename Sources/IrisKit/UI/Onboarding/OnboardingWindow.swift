@@ -120,7 +120,7 @@ public struct OnboardingView: View {
     private var welcomeStep: some View {
         VStack(spacing: 16) {
             Spacer()
-            AppMark(size: 96, glyph: "eye")
+            AppMark(size: 96)
             Text(L10n.s("明目", "Iris"))
                 .font(.system(size: 30, weight: .semibold))
             Text(L10n.s("让眼睛，歇一会儿。", "Give your eyes a moment."))
@@ -262,7 +262,7 @@ public struct OnboardingView: View {
     private var readyStep: some View {
         VStack(spacing: 16) {
             Spacer(minLength: 14)
-            AppMark(size: 68, glyph: "eye")
+            AppMark(size: 68)
             Text(L10n.s("一切就绪", "All set"))
                 .font(.system(size: 22, weight: .semibold))
             Text(L10n.s("明目已经在菜单栏待命 —— 就是那个眼睛图标。",

@@ -3,28 +3,100 @@ import SwiftUI
 
 // MARK: - App 标记
 
-/// 明目的品牌标记：渐变圆角方块 + 眼睛符号。
+/// 明目的品牌标记：就是 App 图标本身 ——「20」，其中的 0 画成一个环加一个点，也就是一只眼睛。
+///
+/// 这里按图标生成器（`scripts/make-icon.swift`）的同一套设计稿坐标绘制，
+/// 保证引导页、关于页看到的标记和 Dock 里的图标是同一个东西。
 public struct AppMark: View {
-    public var size: CGFloat
-    public var glyph: String
 
-    public init(size: CGFloat = 24, glyph: String = "eye") {
+    /// 图标内容区的设计稿边长（1024 画布四周留 100，内容 824）。
+    private static let canvas: CGFloat = 824
+
+    public var size: CGFloat
+
+    public init(size: CGFloat = 24) {
         self.size = size
-        self.glyph = glyph
     }
 
     public var body: some View {
-        RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
-            .fill(IrisPalette.workGradient)
-            .overlay(
-                Image(systemName: glyph)
-                    .font(.system(size: size * 0.52, weight: .semibold))
-                    .foregroundColor(.white)
-            )
+        RoundedRectangle(cornerRadius: size * 0.2237, style: .continuous)
+            .fill(LinearGradient(colors: [IrisPalette.indigo, IrisPalette.violet],
+                                 startPoint: .topLeading, endPoint: .bottomTrailing))
             .frame(width: size, height: size)
-            .shadow(color: IrisPalette.teal.opacity(0.35), radius: size * 0.18, y: size * 0.06)
+            .overlay(mark)
+            .shadow(color: IrisPalette.violet.opacity(0.28), radius: size * 0.16, y: size * 0.05)
             .accessibilityHidden(true)
     }
+
+    /// 小尺寸下笔画加粗、字号加大，否则 22pt 的「20」会糊成一团（和图标的小尺寸版一个道理）。
+    private var compact: Bool { size < 40 }
+
+    private var mark: some View {
+        let ringRadius: CGFloat = 165
+        let ringWidth: CGFloat = compact ? 92 : 72
+        let dotRadius: CGFloat = compact ? 54 : 48
+        let gap: CGFloat = 58
+        let groupScale: CGFloat = compact ? 1.16 : 1.0
+
+        let two = compact ? Self.compactTwo : Self.regularTwo
+        let outer = ringRadius + ringWidth / 2
+        let ringCenterX = (gap + two.box.width) / 2
+        let twoCenterX = -(outer + gap / 2)
+
+        return ZStack {
+            Circle()
+                .strokeBorder(Color.white.opacity(0.97), lineWidth: ringWidth)
+                .frame(width: (ringRadius * 2 + ringWidth), height: (ringRadius * 2 + ringWidth))
+                .offset(x: ringCenterX)
+
+            Circle()
+                .fill(Color.white.opacity(0.97))
+                .frame(width: dotRadius * 2, height: dotRadius * 2)
+                .offset(x: ringCenterX)
+
+            two.path
+                .fill(Color.white.opacity(0.97))
+                .frame(width: two.box.width, height: two.box.height)
+                .offset(x: twoCenterX)
+        }
+        .frame(width: Self.canvas, height: Self.canvas)
+        .scaleEffect(groupScale)
+        .scaleEffect(size / Self.canvas)
+    }
+
+    // MARK: 数字「2」
+
+    /// 把「2」取成矢量路径：用字形本身而不是 Text，
+    /// 这样摆放位置和图标里的完全一致（Text 的行高会把数字顶偏）。
+    private static func makeTwo(fontSize: CGFloat, weight: NSFont.Weight) -> (path: Path, box: CGRect) {
+        let font = NSFont.systemFont(ofSize: fontSize, weight: weight)
+        let line = CTLineCreateWithAttributedString(
+            NSAttributedString(string: "2", attributes: [.font: font]))
+        let raw = CGMutablePath()
+        for run in (CTLineGetGlyphRuns(line) as? [CTRun] ?? []) {
+            let count = CTRunGetGlyphCount(run)
+            var glyphs = [CGGlyph](repeating: 0, count: count)
+            var positions = [CGPoint](repeating: .zero, count: count)
+            CTRunGetGlyphs(run, CFRangeMake(0, count), &glyphs)
+            CTRunGetPositions(run, CFRangeMake(0, count), &positions)
+            for i in 0..<count {
+                guard let glyph = CTFontCreatePathForGlyph(font, glyphs[i], nil) else { continue }
+                raw.addPath(glyph, transform: CGAffineTransform(translationX: positions[i].x,
+                                                                y: positions[i].y))
+            }
+        }
+
+        // 归到原点；CGPath 的 y 轴朝上，SwiftUI 朝下，顺手翻过来
+        let bounds = raw.boundingBoxOfPath
+        let flip = CGAffineTransform(a: 1, b: 0, c: 0, d: -1,
+                                     tx: -bounds.minX, ty: bounds.minY + bounds.height)
+        let placed = CGMutablePath()
+        placed.addPath(raw, transform: flip)
+        return (Path(placed), CGRect(origin: .zero, size: bounds.size))
+    }
+
+    private static let regularTwo = makeTwo(fontSize: 430, weight: .semibold)
+    private static let compactTwo = makeTwo(fontSize: 470, weight: .bold)
 }
 
 // MARK: - 进度环
