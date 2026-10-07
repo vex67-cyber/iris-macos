@@ -83,7 +83,7 @@
 
 ### 下载 DMG（推荐）
 
-👉 **[下载最新版](https://github.com/vex67-cyber/iris-macos/releases/latest)** · `Mingmu-1.1.0.dmg` · 4.6 MB · 需要 macOS 12+ · Apple Silicon
+👉 **[下载最新版](https://github.com/vex67-cyber/iris-macos/releases/latest)** · `Mingmu-1.1.2.dmg` · 3.8 MB · 需要 macOS 12+ · Apple Silicon
 
 1. 双击打开 DMG，把「明目」拖进「应用程序」文件夹
 2. 首次打开请**右键点图标 → 打开**（应用未做 Apple 公证，直接双击会被 Gatekeeper 拦下；之后就能正常双击了）
