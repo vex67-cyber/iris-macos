@@ -7,6 +7,9 @@
 // - Swift 6.4 工具链本身把最低部署目标钳制在 12.0，因此实际产物为 macOS 12+；
 //   换用较旧的工具链编译即可下探到 11。
 // - 已在 macOS 26/27 上编译验证。
+// - 想在本机验证 11.0 的 API 可用性，`-Xswiftc -target -Xswiftc arm64-apple-macos11.0`
+//   是没用的：工具链会把它拉回 12.0，只在链接期留一句 "was built for newer macOS" 警告，
+//   该报的错一个都不会报。这项检查只有 CI（Xcode 工具链）说了算。
 //
 // 语言模式显式使用 Swift 5：本 App 是 AppKit + Combine + SwiftUI 混编，
 // 全部运行在主线程，不必与 Swift 6 严格并发检查缠斗。
