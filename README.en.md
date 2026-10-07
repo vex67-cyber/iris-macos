@@ -84,7 +84,7 @@ All screenshots are rendered offscreen by `swift run IrisSnapshot`, so they show
 
 ### Download (recommended)
 
-👉 **[Latest release](https://github.com/vex67-cyber/iris-macos/releases/latest)** — `Mingmu-1.0.0.dmg`, 3.4 MB, macOS 12+, Apple Silicon
+👉 **[Latest release](https://github.com/vex67-cyber/iris-macos/releases/latest)** — `Mingmu-1.1.0.dmg`, 4.6 MB, macOS 12+, Apple Silicon
 
 1. Open the DMG and drag **明目** into your Applications folder.
 2. The first time you open it, **right-click the icon and choose Open** — the app isn't notarized by Apple, so a plain double-click is blocked by Gatekeeper. After that, double-clicking works normally.
