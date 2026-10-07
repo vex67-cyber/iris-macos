@@ -32,6 +32,9 @@ echo "▸ 生成窗口背景图…"
 mkdir -p "$STAGE/.background"
 swift "$ROOT/scripts/make-dmg-background.swift" "$STAGE/.background" > /dev/null
 
+# 卷宗图标（Finder 侧边栏与挂载时显示）
+cp "$ROOT/Resources/AppIcon.icns" "$STAGE/.VolumeIcon.icns" 2>/dev/null || true
+
 TMP_DMG="$WORK/temp.dmg"
 echo "▸ 创建临时镜像…"
 hdiutil create -volname "$VOLUME_NAME" -srcfolder "$STAGE" -ov -format UDRW "$TMP_DMG" > /dev/null
@@ -40,7 +43,17 @@ echo "▸ 挂载并美化窗口…"
 MOUNT_POINT=$(hdiutil attach "$TMP_DMG" -nobrowse -readwrite | grep -o '/Volumes/.*' | head -1)
 sleep 2
 
+# Finder 自动化需要「自动化」权限，先快速探测一下，避免白等
+if ! osascript -e 'tell application "Finder" to get name of startup disk' > /dev/null 2>&1; then
+  echo "  ⚠︎ 没有「控制访达」的自动化权限，跳过窗口美化"
+  echo "     （授权路径：系统设置 → 隐私与安全性 → 自动化 → 允许终端控制「访达」）"
+  SKIP_STYLING=1
+else
+  SKIP_STYLING=0
+fi
+
 # Finder 自动化：成功则得到带背景和图标位置的窗口，失败/无权限则保持朴素样式
+if [ "${SKIP_STYLING}" = "0" ]; then
 osascript > /dev/null 2>&1 <<APPLESCRIPT &
 tell application "Finder"
     tell disk "$VOLUME_NAME"
@@ -62,10 +75,22 @@ tell application "Finder"
 end tell
 APPLESCRIPT
 OSA_PID=$!
-( sleep 15; kill $OSA_PID 2>/dev/null ) &
+( sleep 25; kill $OSA_PID 2>/dev/null ) &
 WATCHDOG=$!
 wait $OSA_PID 2>/dev/null || true
 kill $WATCHDOG 2>/dev/null || true
+fi
+
+# 设置卷宗自定义图标标志（FinderInfo 32 字节里的 kHasCustomIcon = 0x0400）
+# 注意：macOS 自带 Python 没有 os.setxattr，这里用 xattr 命令写十六进制值
+if [ -f "$MOUNT_POINT/.VolumeIcon.icns" ]; then
+  FI_HEX="00000000000000000400$(printf '0%.0s' {1..44})"
+  if xattr -wx com.apple.FinderInfo "$FI_HEX" "$MOUNT_POINT" 2>/dev/null; then
+    echo "  卷宗图标已设置"
+  else
+    echo "  （卷宗图标设置跳过）"
+  fi
+fi
 
 sync
 echo "▸ 卸载并压缩…"

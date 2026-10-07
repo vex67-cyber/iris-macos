@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 环境信息
+        run: |
+          sw_vers
+          swift --version
+          xcodebuild -version
+
+      - name: 编译（release）
+        run: ./scripts/build-app.sh release
+
+      - name: 单元测试
+        run: |
+          swift test --sdk "$(xcrun --show-sdk-path)"
+
+      - name: 校验 App Bundle 结构
+        run: |
+          set -e
+          APP="dist/明目.app"
+          test -x "$APP/Contents/MacOS/Iris"
+          test -f "$APP/Contents/Info.plist"
+          test -f "$APP/Contents/Resources/AppIcon.icns"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c "Print :LSUIElement" "$APP/Contents/Info.plist"
+          codesign -dv "$APP" 2>&1 | grep -q "Signature=adhoc"
+          lipo -info "$APP/Contents/MacOS/Iris"
+          echo "App bundle 结构正常"
+
+      - name: 打包 DMG（验证打包脚本可用）
+        run: |
+          ./scripts/make-dmg.sh
+          ls -lh dist/*.dmg
+          hdiutil verify dist/*.dmg
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mingmu-dmg
+          path: dist/*.dmg
+          if-no-files-found: error

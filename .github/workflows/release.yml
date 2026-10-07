@@ -1,0 +1,40 @@
+name: Release
+
+# 推 v* 标签时自动构建 App + DMG，并作为附件发到对应的 Release
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-dmg:
+    runs-on: macos-15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 编译并组装 App
+        run: ./scripts/build-app.sh release
+
+      - name: 跑单元测试
+        run: swift test --sdk "$(xcrun --show-sdk-path)"
+
+      - name: 打包 DMG
+        run: ./scripts/make-dmg.sh
+
+      - name: 生成校验和
+        run: |
+          cd dist
+          shasum -a 256 *.dmg | tee SHA256SUMS.txt
+
+      - name: 发布到 Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          gh release view "$TAG" >/dev/null 2>&1 || \
+            gh release create "$TAG" --title "明目 · Iris ${TAG#v}" --generate-notes
+          gh release upload "$TAG" dist/*.dmg dist/SHA256SUMS.txt --clobber
+          gh release view "$TAG" --json assets --jq '.assets[].name'

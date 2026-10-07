@@ -26,6 +26,9 @@ final class StubMonitor: SystemStatusProviding {
     var isScreenLocked = false
     var isSystemAsleep = false
     var isFullscreenApp = false
+    var isAudioPlaying = false
+    var isMicrophoneInUse = false
+    var isCameraInUse = false
 }
 
 /// 每个测试一套隔离的世界（独立的时钟、偏好 suite、临时统计文件）。
@@ -53,6 +56,9 @@ final class TestWorld {
         settings.idleResetEnabled = true
         settings.idleThreshold = 120
         settings.deferFullscreen = false
+        settings.deferOnlyWhenPlayingMedia = false   // 测试里由用例自己决定是否缓期
+        settings.waitForNaturalPause = false         // 同理，需要时用例自己开
+        settings.pauseDuringMeetings = false         // 默认关，避免干扰其它用例
         settings.previewEnabled = false
         settings.remindersEnabled = true
 
@@ -251,6 +257,140 @@ final class SchedulerTests {
         // 退出全屏 → 补上这次提醒
         w.monitor.isFullscreenApp = false
         w.scheduler.tickForTesting()
+        #expect(w.scheduler.phase.isBreaking)
+    }
+
+    @Test("默认只在「全屏 + 有声音」时缓期：全屏写代码照常提醒")
+    func fullscreenWithoutAudioStillReminds() {
+        let w = TestWorld()
+        w.settings.deferFullscreen = true
+        w.settings.deferOnlyWhenPlayingMedia = true   // 默认值
+        w.scheduler.start()
+
+        // 全屏但没声音（写代码、看文档）→ 应该照常提醒
+        w.monitor.isFullscreenApp = true
+        w.monitor.isAudioPlaying = false
+        w.advance(20 * 60 + 1)
+        #expect(w.scheduler.phase.isBreaking, "全屏写代码不该被缓期，否则永远收不到提醒")
+
+        // 全屏 + 正在放声音（看电影）→ 缓期
+        let w2 = TestWorld()
+        w2.settings.deferFullscreen = true
+        w2.settings.deferOnlyWhenPlayingMedia = true
+        w2.scheduler.start()
+        w2.monitor.isFullscreenApp = true
+        w2.monitor.isAudioPlaying = true
+        w2.advance(20 * 60 + 1)
+        #expect(w2.scheduler.phase.isWorking, "看电影时应该缓期")
+    }
+
+    // MARK: 自动判断（会议 / 免打扰 / 自然停顿）
+
+    @Test("开会时自动暂停，散会后自动恢复全新一轮")
+    func meetingAutoPauses() {
+        let w = TestWorld()
+        w.settings.pauseDuringMeetings = true
+        w.scheduler.start()
+
+        w.monitor.isMicrophoneInUse = true
+        w.advance(20 * 60 + 1)
+        #expect(w.scheduler.phase.isPaused, "开会时不该弹提醒")
+        #expect(w.scheduler.autoPauseReason != nil)
+
+        // 散会
+        w.monitor.isMicrophoneInUse = false
+        w.scheduler.tickForTesting()
+        #expect(w.scheduler.phase.isWorking)
+        #expect(abs(w.scheduler.timeUntilNextBreak - 20 * 60) < 1)
+    }
+
+    @Test("摄像头占用也算会议中")
+    func cameraAlsoCountsAsMeeting() {
+        let w = TestWorld()
+        w.settings.pauseDuringMeetings = true
+        w.scheduler.start()
+        w.monitor.isCameraInUse = true
+        w.advance(20 * 60 + 1)
+        #expect(w.scheduler.phase.isPaused)
+    }
+
+    @Test("关掉「开会时自动暂停」后照常提醒")
+    func meetingPauseCanBeDisabled() {
+        let w = TestWorld()
+        w.settings.pauseDuringMeetings = false
+        w.scheduler.start()
+        w.monitor.isMicrophoneInUse = true
+        w.advance(20 * 60 + 1)
+        #expect(w.scheduler.phase.isBreaking)
+    }
+
+    @Test("免打扰时段内不提醒，时段结束后恢复")
+    func quietHoursSuppressReminders() {
+        let w = TestWorld()          // 测试时钟起点是今天 10:00
+        w.settings.quietHoursEnabled = true
+        w.settings.quietStartHour = 9
+        w.settings.quietEndHour = 11   // 10:xx 落在时段内
+        w.scheduler.start()
+
+        w.advance(20 * 60 + 1)
+        #expect(w.scheduler.phase.isPaused)
+
+        w.settings.quietHoursEnabled = false
+        w.scheduler.tickForTesting()
+        #expect(w.scheduler.phase.isWorking)
+    }
+
+    @Test("免打扰时段支持跨午夜")
+    func quietHoursAcrossMidnight() {
+        let w = TestWorld()
+        w.settings.quietHoursEnabled = true
+        w.settings.quietStartHour = 22
+        w.settings.quietEndHour = 8      // 22:00 – 08:00
+
+        // 起点 10:00 不在时段内 → 正常提醒
+        w.scheduler.start()
+        w.advance(20 * 60 + 1)
+        #expect(w.scheduler.phase.isBreaking)
+
+        // 把时钟拨到 23:00 → 落在时段内
+        let w2 = TestWorld()
+        w2.settings.quietHoursEnabled = true
+        w2.settings.quietStartHour = 22
+        w2.settings.quietEndHour = 8
+        w2.clock.now = Calendar.current.date(bySettingHour: 23, minute: 0, second: 0, of: Date())!
+        w2.scheduler.start()
+        w2.advance(20 * 60 + 1)
+        #expect(w2.scheduler.phase.isPaused)
+    }
+
+    @Test("连续打字时不硬打断，等停顿再提醒")
+    func waitsForNaturalPause() {
+        let w = TestWorld()
+        w.settings.waitForNaturalPause = true
+        w.scheduler.start()
+
+        // 一直在打字（空闲 0 秒）→ 到点也不弹
+        w.monitor.idleSeconds = 0
+        w.advance(20 * 60 + 1)
+        #expect(w.scheduler.phase.isWorking, "正在打字时应该等一个自然停顿")
+
+        // 手停下来了 → 立刻补上提醒
+        w.monitor.idleSeconds = 10
+        w.scheduler.tickForTesting()
+        #expect(w.scheduler.phase.isBreaking)
+    }
+
+    @Test("最多等 60 秒，之后照常提醒")
+    func naturalPauseHasGraceLimit() {
+        let w = TestWorld()
+        w.settings.waitForNaturalPause = true
+        w.scheduler.start()
+
+        w.monitor.idleSeconds = 0
+        w.advance(20 * 60 + 1)
+        #expect(w.scheduler.phase.isWorking)
+
+        w.advance(61)          // 超过宽限
         #expect(w.scheduler.phase.isBreaking)
     }
 

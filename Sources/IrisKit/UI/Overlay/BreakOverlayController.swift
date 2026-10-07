@@ -21,7 +21,7 @@ public struct OverlayContext: Equatable {
                 allowSkip: Bool, strictSkip: Bool,
                 allowPostpone: Bool, postponeMinutes: Int, postponesLeft: Int,
                 showTip: Bool, captureInput: Bool, guide: LongBreakGuide,
-                wallpaperDim: Double = 0.62, wallpaperBlur: Double = 16) {
+                wallpaperDim: Double = 0.45, wallpaperBlur: Double = 8) {
         self.kind = kind
         self.startsAt = startsAt
         self.endsAt = endsAt

@@ -19,6 +19,10 @@ public final class BreakScheduler: ObservableObject {
     public static let longPreviewLead: TimeInterval = 30
     /// 微休息临近长休息时的合并窗口（秒）
     private static let mergeWindow: TimeInterval = 90
+    /// 判定「用户正在连续输入」的空闲阈值（秒）——低于它说明手没停过
+    private static let typingIdleThreshold: TimeInterval = 5
+    /// 为了等一个自然停顿，最多把提醒推迟多久（秒）
+    private static let naturalPauseGrace: TimeInterval = 60
 
     // MARK: - Published 状态
 
@@ -31,6 +35,8 @@ public final class BreakScheduler: ObservableObject {
     @Published public private(set) var now: Date
     /// 连续推迟次数
     @Published public private(set) var consecutivePostpones = 0
+    /// 当前自动暂停的原因（会议中 / 免打扰时段），UI 可据此显示
+    @Published public private(set) var autoPauseReason: String?
 
     // MARK: - 回调
 
@@ -107,6 +113,7 @@ public final class BreakScheduler: ObservableObject {
         defer { onTick?(date) }
 
         handleSettingsGate()
+        handleAutoPauseGate()
 
         switch phase {
         case .paused(let reason):
@@ -155,10 +162,17 @@ public final class BreakScheduler: ObservableObject {
 
         if longDue || microDue {
             let kind: BreakKind = longDue ? .long : .micro
+            let dueAt = kind == .long ? nextLongAt : nextMicroAt
 
-            // 全屏（观影 / 演示）时缓期
-            if settings.deferFullscreen && monitor.isFullscreenApp {
-                let dueAt = kind == .long ? nextLongAt : nextMicroAt
+            // 正在连续打字时不硬打断：等一个自然停顿再弹，最多等 60 秒
+            if settings.waitForNaturalPause,
+               monitor.idleSeconds < BreakScheduler.typingIdleThreshold,
+               date.timeIntervalSince(dueAt) < BreakScheduler.naturalPauseGrace {
+                return
+            }
+
+            // 全屏（观影 / 演示）时缓期，退出后补上
+            if shouldDeferForFullscreen {
                 let grace: TimeInterval = kind == .long
                     ? max(settings.longInterval, 10 * 60)
                     : max(settings.microInterval, 5 * 60)
@@ -440,6 +454,61 @@ public final class BreakScheduler: ObservableObject {
     }
 
     // MARK: - 内部
+
+    /// 会议与免打扰时段 → 自动暂停（原因消失后自动恢复一整轮）。
+    ///
+    /// 和手动暂停的区别：这里不记录暂停时长，恢复时直接重排，
+    /// 因为开完会 / 午休结束本身就相当于休息过了。
+    private func handleAutoPauseGate() {
+        let reason = currentAutoPauseReason()
+
+        if let reason {
+            if case .paused(.system) = phase { return }
+            if case .paused(.manual) = phase { return }   // 手动暂停优先
+            if phase.isBreaking { finishBreak(.skipped, silent: true) }
+            phase = .paused(.system)
+            autoPauseReason = reason
+            return
+        }
+
+        if case .paused(.system) = phase {
+            autoPauseReason = nil
+            rescheduleFromNow()
+            phase = .working
+        }
+    }
+
+    private func currentAutoPauseReason() -> String? {
+        if settings.pauseDuringMeetings, monitor.isMicrophoneInUse || monitor.isCameraInUse {
+            return L10n.s("会议中", "In a meeting")
+        }
+        if settings.quietHoursEnabled, isInQuietHours(clock()) {
+            return L10n.s("免打扰时段", "Quiet hours")
+        }
+        return nil
+    }
+
+    /// 判断某个时刻是否落在免打扰时段内（支持跨午夜，例如 22 → 8）。
+    private func isInQuietHours(_ date: Date) -> Bool {
+        let hour = Calendar.current.component(.hour, from: date)
+        let start = settings.quietStartHour
+        let end = settings.quietEndHour
+        if start == end { return false }
+        if start < end { return hour >= start && hour < end }
+        return hour >= start || hour < end
+    }
+
+    /// 是否该因为「全屏」而缓期。
+    ///
+    /// 关键区分：全屏**看电影/打游戏**该缓期，但全屏**写代码/看文档**不该——
+    /// 后者如果也缓期，开发者会永远收不到提醒（这是实测踩到的坑）。
+    /// 因此默认只在「全屏 + 系统正在播放声音」时缓期，
+    /// 用户也可以在设置里改回「任何全屏都缓期」。
+    private var shouldDeferForFullscreen: Bool {
+        guard settings.deferFullscreen, monitor.isFullscreenApp else { return false }
+        guard settings.deferOnlyWhenPlayingMedia else { return true }
+        return monitor.isAudioPlaying
+    }
 
     /// 单元测试用：手动推进一次心跳。
     func tickForTesting() { tick() }

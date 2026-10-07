@@ -1,4 +1,6 @@
 import AppKit
+import AudioToolbox
+import AVFoundation
 import SwiftUI
 import IrisKit
 
@@ -32,6 +34,16 @@ if variant == "probe" {
 
     print(String(format: "全屏检测(CGWindowList)：单次 %.1f ms · 当前窗口数 %d", perCall, windowCount))
     print(String(format: "  按每 2 秒轮询一次 → 平均占 %.1f%% CPU", perCall / 2000 * 100))
+    // 当前系统状态（判断浮层为何不弹）
+    print("当前状态：")
+    print("  全屏应用检测 = \(SystemMonitor.detectFullscreenApp() ? "是（会缓期提醒）" : "否")")
+    print("  键鼠空闲 = \(String(format: "%.1f", SystemMonitor.currentIdleSeconds())) 秒")
+    print("  正在播放声音 = \(SystemMonitor.isAudioPlayingNow() ? "是" : "否")")
+    let front = NSWorkspace.shared.frontmostApplication?.localizedName ?? "未知"
+    print("  前台应用 = \(front)")
+    if let screen = NSScreen.main {
+        print("  主屏可见区域 = \(Int(screen.visibleFrame.width))×\(Int(screen.visibleFrame.height))  全区域 = \(Int(screen.frame.width))×\(Int(screen.frame.height))")
+    }
     print(String(format: "空闲检测(CGEventSource)：单次 %.4f ms", idleCall))
     print(String(format: "  按每 0.5 秒轮询一次 → 平均占 %.3f%% CPU", idleCall / 500 * 100))
     exit(0)
@@ -60,6 +72,65 @@ if variant == "probefetch" {
     print(String(format: "壁纸刷新：墙钟 %.1fs · CPU %.2f 秒 · 缓存 %d 张 · 错误 %@",
                  wall, burned, store.cacheCount, store.lastError ?? "无"))
     print(String(format: "  若每次长休息（50 分钟）刷新一次 → 平均占用 %.2f%% CPU", burned / (50*60) * 100))
+    exit(0)
+}
+
+
+// ── 音效播放方式的 CPU 残留对比
+if variant.hasPrefix("sound-") {
+    
+    let app4 = NSApplication.shared
+    app4.setActivationPolicy(.accessory)
+    let path = "/System/Library/Sounds/Glass.aiff"
+
+    func cpu() -> Double {
+        var u = rusage()
+        guard getrusage(RUSAGE_SELF, &u) == 0 else { return 0 }
+        return Double(u.ru_utime.tv_sec) + Double(u.ru_utime.tv_usec)/1e6
+             + Double(u.ru_stime.tv_sec) + Double(u.ru_stime.tv_usec)/1e6
+    }
+
+    switch variant {
+    case "sound-nssound":
+        let snd = NSSound(contentsOfFile: path, byReference: true)
+        snd?.volume = 0.35
+        snd?.play()
+        // 播完释放
+        RunLoop.main.run(until: Date().addingTimeInterval(2.0))
+        snd?.stop()
+
+    case "sound-nssound-keep":
+        let snd = NSSound(contentsOfFile: path, byReference: true)
+        snd?.volume = 0.35
+        snd?.play()
+        Bookkeeping.retain(snd as Any)
+        RunLoop.main.run(until: Date().addingTimeInterval(2.0))
+
+    case "sound-audioservices":
+        var id: SystemSoundID = 0
+        AudioServicesCreateSystemSoundID(URL(fileURLWithPath: path) as CFURL, &id)
+        AudioServicesPlaySystemSound(id)
+        RunLoop.main.run(until: Date().addingTimeInterval(2.0))
+        AudioServicesDisposeSystemSoundID(id)
+
+    case "sound-avaudio":
+        let player = try? AVAudioPlayer(contentsOf: URL(fileURLWithPath: path))
+        player?.volume = 0.35
+        player?.prepareToPlay()
+        player?.play()
+        RunLoop.main.run(until: Date().addingTimeInterval(2.0))
+        player?.stop()
+
+    default:
+        break
+    }
+
+    RunLoop.main.run(until: Date().addingTimeInterval(1.0))
+    let t0 = cpu()
+    RunLoop.main.run(until: Date().addingTimeInterval(6))
+    let used = cpu() - t0
+    FileHandle.standardError.write(Data(String(format: "%-22s 播放后静置 6 秒: CPU %5.1f%%\n",
+                                               (variant as NSString).utf8String!, used/6*100).utf8))
     exit(0)
 }
 

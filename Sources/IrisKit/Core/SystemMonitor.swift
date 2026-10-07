@@ -1,5 +1,7 @@
 import AppKit
+import CoreAudio
 import CoreGraphics
+import CoreMediaIO
 import Foundation
 
 /// 系统状态提供者 —— 抽成协议便于单元测试注入假数据。
@@ -8,6 +10,18 @@ public protocol SystemStatusProviding: AnyObject {
     var isScreenLocked: Bool { get }
     var isSystemAsleep: Bool { get }
     var isFullscreenApp: Bool { get }
+    /// 系统当前是否有声音在播放（用来区分"看电影"与"全屏写代码"）
+    var isAudioPlaying: Bool { get }
+    /// 麦克风是否被占用（开会 / 语音中）
+    var isMicrophoneInUse: Bool { get }
+    /// 摄像头是否被占用（视频会议中）
+    var isCameraInUse: Bool { get }
+}
+
+public extension SystemStatusProviding {
+    var isAudioPlaying: Bool { false }
+    var isMicrophoneInUse: Bool { false }
+    var isCameraInUse: Bool { false }
 }
 
 /// 监听：空闲时长、锁屏、休眠、前台全屏应用。
@@ -17,6 +31,9 @@ public final class SystemMonitor: ObservableObject, SystemStatusProviding {
     @Published public private(set) var isScreenLocked = false
     @Published public private(set) var isSystemAsleep = false
     @Published public private(set) var isFullscreenApp = false
+    @Published public private(set) var isAudioPlaying = false
+    @Published public private(set) var isMicrophoneInUse = false
+    @Published public private(set) var isCameraInUse = false
 
     /// 从"离开"状态恢复（解锁 / 唤醒）时回调。
     public var onReturnFromAway: (() -> Void)?
@@ -40,11 +57,15 @@ public final class SystemMonitor: ObservableObject, SystemStatusProviding {
         // 全屏检测：2s 轮询（CGWindowList 成本略高，不必太频繁）
         fullscreenTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
             self?.refreshFullscreen()
+            self?.refreshAudio()
+            self?.refreshCaptureDevices()
         }
         fullscreenTimer?.tolerance = 1.0
 
         refreshIdle()
         refreshFullscreen()
+        refreshAudio()
+        refreshCaptureDevices()
     }
 
     public func stop() {
@@ -67,6 +88,110 @@ public final class SystemMonitor: ObservableObject, SystemStatusProviding {
         // kCGAnyInputEventType = 0xFFFFFFFF
         guard let anyEvent = CGEventType(rawValue: ~0) else { return 0 }
         return CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: anyEvent)
+    }
+
+    // MARK: - Audio
+
+    private func refreshAudio() {
+        isAudioPlaying = SystemMonitor.isAudioPlayingNow()
+    }
+
+    /// 默认输出设备上是否有进程正在播放音频（CoreAudio 公开 API，无需权限）。
+    ///
+    /// 用途：区分「全屏看电影/打游戏」（该缓期）与「全屏写代码」（不该缓期）。
+    public static func isAudioPlayingNow() -> Bool {
+        var deviceID = AudioDeviceID(0)
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        var deviceAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+
+        guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject),
+                                         &deviceAddress, 0, nil, &size, &deviceID) == noErr,
+              deviceID != kAudioObjectUnknown else { return false }
+
+        var running: UInt32 = 0
+        var runningSize = UInt32(MemoryLayout<UInt32>.size)
+        var runningAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyDeviceIsRunningSomewhere,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+
+        guard AudioObjectGetPropertyData(deviceID, &runningAddress, 0, nil, &runningSize, &running) == noErr else {
+            return false
+        }
+        return running != 0
+    }
+
+    // MARK: - 摄像头 / 麦克风占用（判断是否在开会）
+
+    private func refreshCaptureDevices() {
+        isMicrophoneInUse = SystemMonitor.isMicrophoneInUseNow()
+        isCameraInUse = SystemMonitor.isCameraInUseNow()
+    }
+
+    /// 默认输入设备（麦克风）是否被任何进程占用。
+    /// 不需要任何权限：这只是设备状态，不是音频内容。
+    public static func isMicrophoneInUseNow() -> Bool {
+        var deviceID = AudioDeviceID(0)
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        var deviceAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultInputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+
+        guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject),
+                                         &deviceAddress, 0, nil, &size, &deviceID) == noErr,
+              deviceID != kAudioObjectUnknown else { return false }
+
+        var running: UInt32 = 0
+        var runningSize = UInt32(MemoryLayout<UInt32>.size)
+        var runningAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyDeviceIsRunningSomewhere,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+
+        guard AudioObjectGetPropertyData(deviceID, &runningAddress, 0, nil, &runningSize, &running) == noErr else {
+            return false
+        }
+        return running != 0
+    }
+
+    /// 是否有摄像头正在被使用（视频会议 / 拍照）。
+    /// 用 CoreMediaIO 的设备状态查询，读取的是"是否在运行"，不涉及画面内容。
+    public static func isCameraInUseNow() -> Bool {
+        var address = CMIOObjectPropertyAddress(
+            mSelector: CMIOObjectPropertySelector(kCMIODevicePropertyDeviceIsRunningSomewhere),
+            mScope: CMIOObjectPropertyScope(kCMIOObjectPropertyScopeGlobal),
+            mElement: CMIOObjectPropertyElement(kCMIOObjectPropertyElementMain))
+
+        var dataSize: UInt32 = 0
+        guard CMIOObjectGetPropertyDataSize(CMIOObjectID(kCMIOObjectSystemObject),
+                                           &address, 0, nil, &dataSize) == noErr,
+              dataSize > 0 else { return false }
+
+        let count = Int(dataSize) / MemoryLayout<CMIOObjectID>.size
+        var devices = [CMIOObjectID](repeating: 0, count: max(1, count))
+        var used: UInt32 = 0
+        guard CMIOObjectGetPropertyData(CMIOObjectID(kCMIOObjectSystemObject),
+                                        &address, 0, nil, dataSize, &used, &devices) == noErr else { return false }
+
+        for device in devices where device != 0 {
+            var running: UInt32 = 0
+            var runningSize = UInt32(MemoryLayout<UInt32>.size)
+            var runningAddress = CMIOObjectPropertyAddress(
+                mSelector: CMIOObjectPropertySelector(kCMIODevicePropertyDeviceIsRunningSomewhere),
+                mScope: CMIOObjectPropertyScope(kCMIOObjectPropertyScopeGlobal),
+                mElement: CMIOObjectPropertyElement(kCMIOObjectPropertyElementMain))
+
+            guard CMIOObjectHasProperty(device, &runningAddress) else { continue }
+            if CMIOObjectGetPropertyData(device, &runningAddress, 0, nil, runningSize, &used, &running) == noErr,
+               running != 0 {
+                return true
+            }
+        }
+        return false
     }
 
     // MARK: - Fullscreen

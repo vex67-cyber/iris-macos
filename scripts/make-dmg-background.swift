@@ -38,7 +38,7 @@ func drawBackground(size: CGSize, scale: CGFloat) -> NSBitmapImageRep {
 
     // 2. 左右各一团品牌色柔光（不打扰图标阅读，只是氛围）
     let glowTeal = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
-                              colors: [CGColor(red: 0.20, green: 0.78, blue: 0.71, alpha: 0.16),
+                              colors: [CGColor(red: 0.20, green: 0.78, blue: 0.71, alpha: 0.22),
                                        CGColor(red: 0.20, green: 0.78, blue: 0.71, alpha: 0)] as CFArray,
                               locations: [0, 1])!
     ctx.drawRadialGradient(glowTeal,
@@ -46,7 +46,7 @@ func drawBackground(size: CGSize, scale: CGFloat) -> NSBitmapImageRep {
                            endCenter: CGPoint(x: 150, y: 150), endRadius: 240, options: [])
 
     let glowIndigo = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
-                                colors: [CGColor(red: 0.49, green: 0.55, blue: 0.97, alpha: 0.14),
+                                colors: [CGColor(red: 0.49, green: 0.55, blue: 0.97, alpha: 0.20),
                                          CGColor(red: 0.49, green: 0.55, blue: 0.97, alpha: 0)] as CFArray,
                                 locations: [0, 1])!
     ctx.drawRadialGradient(glowIndigo,
@@ -54,21 +54,28 @@ func drawBackground(size: CGSize, scale: CGFloat) -> NSBitmapImageRep {
                            endCenter: CGPoint(x: 510, y: 140), endRadius: 240, options: [])
 
     // 3. 中间箭头（App → 应用程序）
-    let arrowY: CGFloat = 205
-    let arrowStart: CGFloat = 268
-    let arrowEnd: CGFloat = 392
+    // 与图标位置对齐：Finder 里图标中心在距顶部 200pt 处，而这里是底部原点坐标
+    let arrowY: CGFloat = size.height - 200
+    let arrowStart: CGFloat = 258
+    let arrowEnd: CGFloat = 402
 
-    ctx.setStrokeColor(CGColor(red: 0.44, green: 0.48, blue: 0.56, alpha: 0.55))
-    ctx.setLineWidth(3)
+    let arrowColor = CGColor(red: 0.42, green: 0.46, blue: 0.55, alpha: 0.62)
+
+    // 虚线尾巴：暗示"拖过去"
+    ctx.setStrokeColor(arrowColor)
+    ctx.setLineWidth(2.5)
     ctx.setLineCap(.round)
+    ctx.setLineDash(phase: 0, lengths: [7, 7])
     ctx.move(to: CGPoint(x: arrowStart, y: arrowY))
-    ctx.addLine(to: CGPoint(x: arrowEnd - 12, y: arrowY))
+    ctx.addLine(to: CGPoint(x: arrowEnd - 14, y: arrowY))
     ctx.strokePath()
+    ctx.setLineDash(phase: 0, lengths: [])
 
-    ctx.setFillColor(CGColor(red: 0.44, green: 0.48, blue: 0.56, alpha: 0.55))
+    // 实心箭头
+    ctx.setFillColor(arrowColor)
     ctx.move(to: CGPoint(x: arrowEnd, y: arrowY))
-    ctx.addLine(to: CGPoint(x: arrowEnd - 15, y: arrowY + 9))
-    ctx.addLine(to: CGPoint(x: arrowEnd - 15, y: arrowY - 9))
+    ctx.addLine(to: CGPoint(x: arrowEnd - 16, y: arrowY + 9))
+    ctx.addLine(to: CGPoint(x: arrowEnd - 16, y: arrowY - 9))
     ctx.closePath()
     ctx.fillPath()
 
@@ -85,8 +92,8 @@ func drawBackground(size: CGSize, scale: CGFloat) -> NSBitmapImageRep {
         CTLineDraw(line, ctx)
     }
 
-    draw("把「明目」拖进「应用程序」", at: CGPoint(x: size.width / 2, y: 118), size: 13, weight: .medium, alpha: 0.62)
-    draw("拖入后即可从启动台或「应用程序」打开", at: CGPoint(x: size.width / 2, y: 96), size: 11, weight: .regular, alpha: 0.38)
+    draw("把「明目」拖进「应用程序」", at: CGPoint(x: size.width / 2, y: 104), size: 13, weight: .medium, alpha: 0.66)
+    draw("拖入后即可从启动台或「应用程序」打开", at: CGPoint(x: size.width / 2, y: 82), size: 11, weight: .regular, alpha: 0.42)
 
     return rep
 }

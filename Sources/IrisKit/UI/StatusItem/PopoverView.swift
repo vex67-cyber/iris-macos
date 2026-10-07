@@ -71,7 +71,7 @@ public struct PopoverView: View {
         case .breaking(let kind): return kind.title
         case .paused(.manual): return L10n.s("已暂停", "Paused")
         case .paused(.disabled): return L10n.s("已关闭", "Off")
-        case .paused(.system): return L10n.s("暂时挂起", "Suspended")
+        case .paused(.system): return scheduler.autoPauseReason ?? L10n.s("自动暂停", "Auto-paused")
         }
     }
 
@@ -161,7 +161,7 @@ public struct PopoverView: View {
         case .paused(.disabled):
             return L10n.s("提醒已关闭", "Reminders off")
         case .paused(.system):
-            return L10n.s("暂时挂起", "Suspended")
+            return scheduler.autoPauseReason ?? L10n.s("自动暂停", "Auto-paused")
         }
     }
 
@@ -222,6 +222,11 @@ public struct PopoverView: View {
                 PrimaryActionButton(L10n.s("开启提醒", "Turn on"), systemImage: "play.fill") {
                     settings.remindersEnabled = true
                 }
+            case .paused(.system):
+                // 会议 / 免打扰时段：不提供"恢复"，否则会被立刻重新暂停
+                SecondaryActionButton(L10n.s("结束后自动恢复", "Resumes automatically"),
+                                      systemImage: "moon.zzz",
+                                      isEnabled: false) {}
             case .paused:
                 PrimaryActionButton(L10n.s("恢复提醒", "Resume"), systemImage: "play.fill") {
                     calls.resume()

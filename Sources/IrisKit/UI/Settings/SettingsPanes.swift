@@ -150,10 +150,54 @@ struct GeneralPane: View {
             }
             RowDivider()
             Row(L10n.s("全屏时暂缓提醒", "Defer while fullscreen"),
-                subtitle: L10n.s("看电影、演示、打游戏时不打扰", "For movies, presentations, games")) {
+                subtitle: L10n.s("看电影、打游戏、演示时不打扰", "For movies, games, presentations")) {
                 Toggle("", isOn: $settings.deferFullscreen)
                     .labelsHidden()
                     .toggleStyle(.switch)
+            }
+            if settings.deferFullscreen {
+                RowDivider()
+                Row(L10n.s("仅在播放声音时暂缓", "Only when audio is playing"),
+                    subtitle: L10n.s("推荐开启：全屏写代码、看文档时照常提醒；关闭后任何全屏应用都不会被打断",
+                                     "Recommended: fullscreen coding still gets reminders")) {
+                    Toggle("", isOn: $settings.deferOnlyWhenPlayingMedia)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                }
+            }
+            RowDivider()
+            Row(L10n.s("连续输入时等一个停顿", "Wait for a natural pause"),
+                subtitle: L10n.s("正在打字时不硬打断，等手停下来再提醒（最多等 60 秒）",
+                                 "Don't interrupt mid-typing — wait up to 60 s for a pause")) {
+                Toggle("", isOn: $settings.waitForNaturalPause)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+            }
+            RowDivider()
+            Row(L10n.s("开会时自动暂停", "Auto-pause in meetings"),
+                subtitle: L10n.s("检测到麦克风或摄像头被占用就暂停，散会后自动恢复",
+                                 "Pauses while the microphone or camera is in use")) {
+                Toggle("", isOn: $settings.pauseDuringMeetings)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+            }
+            RowDivider()
+            Row(L10n.s("免打扰时段", "Quiet hours"),
+                subtitle: L10n.s("例如午休时间不打扰；跨午夜也支持（如 22:00 – 08:00）",
+                                 "Time ranges work across midnight too")) {
+                Toggle("", isOn: $settings.quietHoursEnabled)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+            }
+            if settings.quietHoursEnabled {
+                RowDivider()
+                Row(L10n.s("时间段", "Time range")) {
+                    HStack(spacing: 6) {
+                        hourPicker($settings.quietStartHour)
+                        Text("–").foregroundColor(.secondary)
+                        hourPicker($settings.quietEndHour)
+                    }
+                }
             }
         }
 
@@ -230,6 +274,17 @@ struct GeneralPane: View {
                 RoundedRectangle(cornerRadius: 5, style: .continuous)
                     .fill(Color.primary.opacity(0.06))
             )
+    }
+
+    private func hourPicker(_ binding: Binding<Int>) -> some View {
+        Picker("", selection: binding) {
+            ForEach(0..<24, id: \.self) { hour in
+                Text(String(format: "%02d:00", hour)).tag(hour)
+            }
+        }
+        .labelsHidden()
+        .pickerStyle(.menu)
+        .frame(width: 92)
     }
 
     private func setLaunchAtLogin(_ enabled: Bool) {

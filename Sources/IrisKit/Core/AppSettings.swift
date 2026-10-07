@@ -31,6 +31,12 @@ public final class AppSettings: ObservableObject {
         static let idleResetEnabled = "idleResetEnabled"
         static let idleThreshold = "idleThreshold"
         static let deferFullscreen = "deferFullscreen"
+        static let deferOnlyWhenPlayingMedia = "deferOnlyWhenPlayingMedia"
+        static let waitForNaturalPause = "waitForNaturalPause"
+        static let pauseDuringMeetings = "pauseDuringMeetings"
+        static let quietHoursEnabled = "quietHoursEnabled"
+        static let quietStartHour = "quietStartHour"
+        static let quietEndHour = "quietEndHour"
         static let remindersEnabled = "remindersEnabled"
         static let showTip = "showTip"
         static let menuBarDisplay = "menuBarDisplay"
@@ -66,6 +72,12 @@ public final class AppSettings: ObservableObject {
             K.idleResetEnabled: true,
             K.idleThreshold: 120.0,
             K.deferFullscreen: true,
+            K.deferOnlyWhenPlayingMedia: true,
+            K.waitForNaturalPause: true,
+            K.pauseDuringMeetings: true,
+            K.quietHoursEnabled: false,
+            K.quietStartHour: 12,
+            K.quietEndHour: 14,
             K.remindersEnabled: true,
             K.showTip: true,
             K.menuBarDisplay: MenuBarDisplay.iconAndTime.rawValue,
@@ -81,8 +93,8 @@ public final class AppSettings: ObservableObject {
             K.preset: ReminderPreset.classic.rawValue,
             K.wallpaperSource: WallpaperSource.bing.rawValue,
             K.wallpaperRefresh: WallpaperRefresh.everyLongBreak.rawValue,
-            K.wallpaperDim: 0.62,
-            K.wallpaperBlur: 16.0,
+            K.wallpaperDim: 0.45,
+            K.wallpaperBlur: 8.0,
         ])
     }
 
@@ -150,6 +162,29 @@ public final class AppSettings: ObservableObject {
     @Published public var deferFullscreen: Bool = true {
         didSet { d.set(deferFullscreen, forKey: K.deferFullscreen) }
     }
+    /// 只在「全屏 + 正在播放声音」时缓期。
+    /// 默认开启：这样全屏写代码/看文档照常提醒，而全屏看电影打游戏不被打扰。
+    @Published public var deferOnlyWhenPlayingMedia: Bool = true {
+        didSet { d.set(deferOnlyWhenPlayingMedia, forKey: K.deferOnlyWhenPlayingMedia) }
+    }
+    /// 连续输入（打字）时不硬打断，等一个自然的停顿再提醒
+    @Published public var waitForNaturalPause: Bool = true {
+        didSet { d.set(waitForNaturalPause, forKey: K.waitForNaturalPause) }
+    }
+    /// 检测到麦克风 / 摄像头被占用（开会、通话）时自动暂停提醒，散会后自动恢复
+    @Published public var pauseDuringMeetings: Bool = true {
+        didSet { d.set(pauseDuringMeetings, forKey: K.pauseDuringMeetings) }
+    }
+    /// 免打扰时段（例如午休）
+    @Published public var quietHoursEnabled: Bool = false {
+        didSet { d.set(quietHoursEnabled, forKey: K.quietHoursEnabled) }
+    }
+    @Published public var quietStartHour: Int = 12 {
+        didSet { d.set(quietStartHour, forKey: K.quietStartHour) }
+    }
+    @Published public var quietEndHour: Int = 14 {
+        didSet { d.set(quietEndHour, forKey: K.quietEndHour) }
+    }
 
     // MARK: - 外观与菜单栏
 
@@ -205,11 +240,11 @@ public final class AppSettings: ObservableObject {
         didSet { d.set(wallpaperRefresh.rawValue, forKey: K.wallpaperRefresh) }
     }
     /// 暗色遮罩强度（0–0.85），保证浮层文字清晰
-    @Published public var wallpaperDim: Double = 0.62 {
+    @Published public var wallpaperDim: Double = 0.45 {
         didSet { d.set(wallpaperDim, forKey: K.wallpaperDim) }
     }
     /// 背景模糊半径
-    @Published public var wallpaperBlur: Double = 16 {
+    @Published public var wallpaperBlur: Double = 8 {
         didSet { d.set(wallpaperBlur, forKey: K.wallpaperBlur) }
     }
 
@@ -252,6 +287,12 @@ public final class AppSettings: ObservableObject {
         idleResetEnabled = d.bool(forKey: K.idleResetEnabled)
         idleThreshold = d.double(forKey: K.idleThreshold)
         deferFullscreen = d.bool(forKey: K.deferFullscreen)
+        deferOnlyWhenPlayingMedia = d.bool(forKey: K.deferOnlyWhenPlayingMedia)
+        waitForNaturalPause = d.bool(forKey: K.waitForNaturalPause)
+        pauseDuringMeetings = d.bool(forKey: K.pauseDuringMeetings)
+        quietHoursEnabled = d.bool(forKey: K.quietHoursEnabled)
+        quietStartHour = d.integer(forKey: K.quietStartHour)
+        quietEndHour = d.integer(forKey: K.quietEndHour)
         remindersEnabled = d.bool(forKey: K.remindersEnabled)
         showTip = d.bool(forKey: K.showTip)
         menuBarDisplay = MenuBarDisplay(rawValue: d.string(forKey: K.menuBarDisplay) ?? "") ?? .iconAndTime
@@ -307,6 +348,7 @@ public final class AppSettings: ObservableObject {
         idleResetEnabled = true
         idleThreshold = 120
         deferFullscreen = true
+        deferOnlyWhenPlayingMedia = true
         showTip = true
         menuBarDisplay = .iconAndTime
         longBreakGuide = .breathing
@@ -320,8 +362,8 @@ public final class AppSettings: ObservableObject {
         remindersEnabled = true
         wallpaperSource = .bing
         wallpaperRefresh = .everyLongBreak
-        wallpaperDim = 0.62
-        wallpaperBlur = 16
+        wallpaperDim = 0.45
+        wallpaperBlur = 8
     }
 }
 

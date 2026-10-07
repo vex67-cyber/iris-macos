@@ -14,8 +14,6 @@ public struct BreakOverlayView: View {
     @State private var tipIndex = 0
     @State private var controlsVisible: Bool
     @State private var tipTimer: Timer?
-    /// 背景光斑的漂移位移（由隐式动画驱动，不占 CPU）
-    @State private var glowOffset = CGSize(width: -84, height: -62)
     /// 长休息引导方式在浮层内可切换，因此用本地状态持有
     @State private var guide: LongBreakGuide
     /// 壁纸（自动刷新，图片到达后淡入）
@@ -110,19 +108,21 @@ public struct BreakOverlayView: View {
         // 2. 漂移用隐式动画（GPU 合成），不要用高频心跳重绘 —— 那是这台机器上最大的一笔 CPU 开销。
         Color.clear
             .overlay(
-                Circle()
-                    .fill(RadialGradient(colors: [accent.opacity(0.26), accent.opacity(0.05), .clear],
-                                         center: .center, startRadius: 24, endRadius: 560))
-                    .frame(width: 1150, height: 1150)
-                    .offset(x: glowOffset.width, y: glowOffset.height)
-                    .irisAnimation(.easeInOut(duration: 21).repeatForever(autoreverses: true),
-                                   value: glowOffset)
-                    .allowsHitTesting(false)
+                // 用同样 1 秒一次的心跳驱动漂移。
+                // ⚠️ 这里绝对不能用 .repeatForever 的隐式动画：实测浮层关闭后
+                // SwiftUI 的动画引擎仍会以 60fps 空转，App 永久占用 ~10% CPU。
+                // 心跳定时器会随视图一起销毁（TickClock.deinit 里 invalidate），所以是安全的。
+                TickerView(interval: 1.0) { tl in
+                    let t = tl.timeIntervalSinceReferenceDate
+                    Circle()
+                        .fill(RadialGradient(colors: [accent.opacity(0.26), accent.opacity(0.05), .clear],
+                                             center: .center, startRadius: 24, endRadius: 560))
+                        .frame(width: 1150, height: 1150)
+                        .offset(x: sin(t / 19) * 84, y: cos(t / 26) * 62)
+                }
+                .allowsHitTesting(false)
             )
             .ignoresSafeArea()
-            .onAppear {
-                glowOffset = CGSize(width: 84, height: 62)
-            }
     }
 
     // MARK: - 顶部标签
