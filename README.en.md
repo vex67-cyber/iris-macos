@@ -1,5 +1,7 @@
 # Mingmu (明目) · Iris
 
+[![CI](https://github.com/vex67-cyber/iris-macos/actions/workflows/ci.yml/badge.svg)](https://github.com/vex67-cyber/iris-macos/actions/workflows/ci.yml)
+
 [简体中文](README.md) · **English**
 
 > Give your eyes a moment.

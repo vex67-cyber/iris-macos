@@ -1,5 +1,7 @@
 # 明目 · Iris
 
+[![CI](https://github.com/vex67-cyber/iris-macos/actions/workflows/ci.yml/badge.svg)](https://github.com/vex67-cyber/iris-macos/actions/workflows/ci.yml)
+
 **简体中文** · [English](README.en.md)
 
 > 让眼睛，歇一会儿。
