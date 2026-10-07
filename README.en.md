@@ -215,10 +215,15 @@ The reference code was translated from the tested Swift version but has not been
 
 The behaviour is modelled on what works in the established break reminders: **Time Out** (two-tier cycles, idle reset), **Stretchly** (bounded postponing, pre-break heads-up, strict mode), **LookAway** (context-aware pausing, menu bar countdown), **DeskRest** (only interrupting at sensible moments) and 护眼宝 (lightweight, dismissible reminders instead of a locked screen).
 
-The 20-20-20 rule comes from the American Academy of Optometry's [screen-time guidance](https://www.aao.org/eye-health/tips-prevention/computer-usage). The research is mixed on how much it helps, but compliance is what matters — which is why the app treats "don't be annoying" as a first-class feature: reset on idle, defer for media, `Esc` postpones instead of skips, and turning reminders off pauses rather than quits.
+The 20-20-20 rule comes from the American Academy of Ophthalmology's [screen-time guidance](https://www.aao.org/eye-health/tips-prevention/computer-usage). The research is mixed on how much it helps, but compliance is what matters — which is why the app treats "don't be annoying" as a first-class feature: reset on idle, defer for media, `Esc` postpones instead of skips, and turning reminders off pauses rather than quits.
 
 ---
 
 ## License
 
-MIT
+**PolyForm Noncommercial License 1.0.0** · [full text](LICENSE)
+
+- **Free** for personal use, study, research, and for schools and other nonprofit organizations. Fork it, change it, use it.
+- **Commercial use requires a separate license.** If you're a company, or the use is connected to making money, please open an issue first.
+
+The icon and the code are original to this project.

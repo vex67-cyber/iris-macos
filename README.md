@@ -232,6 +232,11 @@ Esc 推迟优先于跳过、关闭提醒只是暂停而不是卸载。
 
 ## 授权
 
-MIT License。图标、代码均为本项目原创。
+**PolyForm Noncommercial License 1.0.0** · [协议原文](LICENSE)
+
+- **免费**：自己用、学习研究、学校及其他非营利机构使用，随便改、随便用
+- **需要单独授权**：公司或任何以营利为目的的用途，请先通过仓库 Issue 联系作者
+
+图标与代码均为本项目原创。
 
 © 2026 明目 · 用 SwiftUI 与 AppKit 构建，向 Time Out、Stretchly、LookAway 致敬。

@@ -828,6 +828,16 @@ struct AboutPane: View {
     @ObservedObject var settings: AppSettings
     var onReplayOnboarding: () -> Void
 
+    /// 版本号从 bundle 读，免得和 Info.plist 走散。
+    /// 快照工具跑在 bundle 外面，读不到就显示「开发版本」。
+    private var versionText: String {
+        guard let v = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+              !v.isEmpty else {
+            return L10n.s("开发版本", "Development build")
+        }
+        return L10n.s("版本 \(v) · 为 macOS 打造", "Version \(v) · Made for macOS")
+    }
+
     var body: some View {
         VStack(spacing: 10) {
             AppMark(size: 76)
@@ -836,7 +846,7 @@ struct AboutPane: View {
             Text(L10n.s("让眼睛，歇一会儿。", "Give your eyes a moment."))
                 .font(.system(size: 13))
                 .foregroundColor(.secondary)
-            Text(L10n.s("版本 1.0.0 · 为 macOS 打造", "Version 1.0.0 · Made for macOS"))
+            Text(versionText)
                 .font(.system(size: 11))
                 .foregroundColor(.secondary.opacity(0.75))
         }
@@ -878,6 +888,16 @@ struct AboutPane: View {
             }
         }
 
+        SettingsGroup(L10n.s("授权", "License")) {
+            Row(L10n.s("PolyForm Noncommercial 1.0.0", "PolyForm Noncommercial 1.0.0"),
+                subtitle: L10n.s("自己用、学习研究、学校等非营利机构使用免费；公司等商业用途需要单独授权。",
+                                 "Free for personal, academic and other noncommercial use. Commercial use requires a separate license.")) {
+                Link(L10n.s("查看协议", "View"),
+                     destination: URL(string: "https://github.com/vex67-cyber/iris-macos/blob/main/LICENSE")!)
+                    .font(.system(size: 12))
+            }
+        }
+
         SettingsGroup(L10n.s("快捷键", "Shortcuts")) {
             Row(L10n.s("立即休息", "Take a break now")) { Text("⌃⌥⌘B").foregroundColor(.secondary) }
             RowDivider()
@@ -894,7 +914,7 @@ struct AboutPane: View {
         .padding(.top, 2)
 
         Text(L10n.s("© 2026 明目 · 用 SwiftUI 与 AppKit 构建，向 Time Out、Stretchly、LookAway 致敬。",
-                    "© 2026 Iris · Hand-built with SwiftUI, inspired by Time Out, Stretchly and LookAway."))
+                    "© 2026 Iris · Built with SwiftUI and AppKit, inspired by Time Out, Stretchly and LookAway."))
             .font(.system(size: 11))
             .foregroundColor(.secondary.opacity(0.75))
     }

@@ -42,6 +42,8 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN_DIR/Iris" "$APP/Contents/MacOS/Iris"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 cp "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
+# 协议要求：拿到副本的人也要拿到协议原文，所以塞进 App 里跟着 DMG 一起分发
+cp "$ROOT/LICENSE" "$APP/Contents/Resources/LICENSE.txt"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 chmod +x "$APP/Contents/MacOS/Iris"
 
