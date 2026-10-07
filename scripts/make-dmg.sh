@@ -32,9 +32,6 @@ echo "▸ 生成窗口背景图…"
 mkdir -p "$STAGE/.background"
 swift "$ROOT/scripts/make-dmg-background.swift" "$STAGE/.background" > /dev/null
 
-# 卷宗图标（Finder 侧边栏与挂载时显示）
-cp "$ROOT/Resources/AppIcon.icns" "$STAGE/.VolumeIcon.icns" 2>/dev/null || true
-
 TMP_DMG="$WORK/temp.dmg"
 echo "▸ 创建临时镜像…"
 hdiutil create -volname "$VOLUME_NAME" -srcfolder "$STAGE" -ov -format UDRW "$TMP_DMG" > /dev/null
@@ -96,6 +93,25 @@ sync
 echo "▸ 卸载并压缩…"
 hdiutil detach "$MOUNT_POINT" -quiet 2>/dev/null || hdiutil detach "$MOUNT_POINT" -force -quiet 2>/dev/null || true
 rm -f "$DMG"
+
+# 卷宗图标必须放在 Finder 美化「之后」补：Finder 打开卷时会吃掉 .VolumeIcon.icns。
+# 所以这里再挂载一次（完全不经过 Finder），写入图标文件与 kHasCustomIcon 标志。
+if [ -f "$ROOT/Resources/AppIcon.icns" ]; then
+  M2=$(hdiutil attach "$TMP_DMG" -nobrowse -readwrite | grep -o '/Volumes/.*' | head -1)
+  if [ -n "${M2:-}" ]; then
+    cp "$ROOT/Resources/AppIcon.icns" "$M2/.VolumeIcon.icns" 2>/dev/null || true
+    # FinderInfo 32 字节：偏移 8 处的 0x0400 = kHasCustomIcon
+    xattr -wx com.apple.FinderInfo "00000000000000000400$(printf '0%.0s' {1..44})" "$M2" 2>/dev/null || true
+    sync
+    if [ -f "$M2/.VolumeIcon.icns" ] && xattr "$M2" 2>/dev/null | grep -q FinderInfo; then
+      echo "  卷宗图标已设置"
+    else
+      echo "  （卷宗图标设置跳过）"
+    fi
+    hdiutil detach "$M2" -quiet 2>/dev/null || hdiutil detach "$M2" -force -quiet 2>/dev/null || true
+  fi
+fi
+
 hdiutil convert "$TMP_DMG" -format UDZO -imagekey zlib-level=9 -o "$DMG" > /dev/null
 
 rm -rf "$WORK"
