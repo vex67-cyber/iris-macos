@@ -53,6 +53,24 @@ final class SettingsWindowController {
     }
 }
 
+/// 侧边栏分页图标：白字形 + 品牌色渐变底 + 一丝阴影（系统设置里就是这种质感）。
+private struct PaneIcon: View {
+    let pane: SettingsPane
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 5.5, style: .continuous)
+            .fill(LinearGradient(colors: [pane.tint.opacity(0.95), pane.tint],
+                                 startPoint: .top, endPoint: .bottom))
+            .frame(width: 20, height: 20)
+            .overlay(
+                Image(systemName: pane.symbolName)
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundColor(.white)
+            )
+            .shadow(color: .black.opacity(0.16), radius: 1.2, y: 0.5)
+    }
+}
+
 // MARK: - 根视图
 
 public struct SettingsRootView: View {
@@ -85,29 +103,26 @@ public struct SettingsRootView: View {
     }
 
     private var sidebar: some View {
-        VStack(spacing: 0) {
+        // 系统设置那种侧边栏的关键是「窗口背后的半透明材质」，
+        // 纯色背景一眼就廉价。这里垫一层 NSVisualEffectView(.sidebar)。
+        ZStack(alignment: .top) {
+            VisualEffectBlur(material: .sidebar, blendingMode: .behindWindow)
+
             List(selection: Binding(get: { navigation.pane },
                                     set: { navigation.pane = $0 ?? .general })) {
                 ForEach(SettingsPane.allCases) { pane in
                     Label {
                         Text(pane.title).font(.system(size: 13))
                     } icon: {
-                        Image(systemName: pane.symbolName)
-                            .foregroundColor(.white)
-                            .font(.system(size: 11, weight: .semibold))
-                            .frame(width: 20, height: 20)
-                            .background(
-                                RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                    .fill(LinearGradient(colors: [pane.tint.opacity(0.92), pane.tint],
-                                                         startPoint: .top, endPoint: .bottom))
-                            )
+                        PaneIcon(pane: pane)
                     }
                     .tag(pane)
+                    .padding(.vertical, 1)
                 }
             }
             .listStyle(.sidebar)
             .irisHideScrollBackground()
-            .padding(.top, 30)
+            .padding(.top, 28)
         }
         .frame(width: 196)
     }

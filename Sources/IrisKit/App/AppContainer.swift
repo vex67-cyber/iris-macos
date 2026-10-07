@@ -37,12 +37,12 @@ public enum SettingsPane: String, CaseIterable, Identifiable {
 
     public var tint: Color {
         switch self {
-        case .general: return .gray
+        case .general: return Color(nsColor: .systemGray)
         case .breaks: return IrisPalette.teal
-        case .wallpaper: return IrisPalette.violet
-        case .sound: return IrisPalette.indigo
+        case .wallpaper: return IrisPalette.aqua
+        case .sound: return IrisPalette.violet
         case .stats: return IrisPalette.mint
-        case .about: return IrisPalette.aqua
+        case .about: return IrisPalette.indigo
         }
     }
 }
