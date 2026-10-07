@@ -26,8 +26,6 @@ func drawBackground(size: CGSize, scale: CGFloat) -> NSBitmapImageRep {
     ctx.setAllowsAntialiasing(true)
     ctx.interpolationQuality = .high
 
-    let rect = CGRect(origin: .zero, size: size)
-
     // 1. 底色：极浅的暖白 → 淡青
     let bg = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
                         colors: [CGColor(red: 0.99, green: 0.99, blue: 1.0, alpha: 1),

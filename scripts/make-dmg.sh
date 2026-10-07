@@ -32,6 +32,18 @@ echo "▸ 生成窗口背景图…"
 mkdir -p "$STAGE/.background"
 swift "$ROOT/scripts/make-dmg-background.swift" "$STAGE/.background" > /dev/null
 
+# 确保某个磁盘映像已经完全卸载（CI 上卸载是异步的，不等它会导致 convert 报
+# "Resource temporarily unavailable"）
+detach_image() {
+  local img="$1"
+  for _ in 1 2 3 4 5; do
+    hdiutil info 2>/dev/null | grep -q "$img" || return 0
+    hdiutil detach "$img" -quiet 2>/dev/null || hdiutil detach "$img" -force -quiet 2>/dev/null || true
+    sleep 1
+  done
+  return 0
+}
+
 TMP_DMG="$WORK/temp.dmg"
 echo "▸ 创建临时镜像…"
 hdiutil create -volname "$VOLUME_NAME" -srcfolder "$STAGE" -ov -format UDRW "$TMP_DMG" > /dev/null
@@ -92,6 +104,7 @@ fi
 sync
 echo "▸ 卸载并压缩…"
 hdiutil detach "$MOUNT_POINT" -quiet 2>/dev/null || hdiutil detach "$MOUNT_POINT" -force -quiet 2>/dev/null || true
+detach_image "$TMP_DMG"
 rm -f "$DMG"
 
 # 卷宗图标必须放在 Finder 美化「之后」补：Finder 打开卷时会吃掉 .VolumeIcon.icns。
@@ -109,10 +122,24 @@ if [ -f "$ROOT/Resources/AppIcon.icns" ]; then
       echo "  （卷宗图标设置跳过）"
     fi
     hdiutil detach "$M2" -quiet 2>/dev/null || hdiutil detach "$M2" -force -quiet 2>/dev/null || true
+    detach_image "$TMP_DMG"
   fi
 fi
 
-hdiutil convert "$TMP_DMG" -format UDZO -imagekey zlib-level=9 -o "$DMG" > /dev/null
+for attempt in 1 2 3; do
+  if hdiutil convert "$TMP_DMG" -format UDZO -imagekey zlib-level=9 -o "$DMG" > /dev/null 2>&1; then
+    break
+  fi
+  echo "  压缩重试 $attempt…"
+  detach_image "$TMP_DMG"
+  sleep 3
+done
+
+if [ ! -f "$DMG" ]; then
+  echo "✗ 打包失败：无法生成 $DMG"
+  rm -rf "$WORK"
+  exit 1
+fi
 
 rm -rf "$WORK"
 
