@@ -13,6 +13,56 @@ import IrisKit
 let variant = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "full"
 let duration = CommandLine.arguments.count > 2 ? Double(CommandLine.arguments[2]) ?? 10 : 10
 
+
+// ── 探针模式：测量系统调用的单次开销
+if variant == "probe" {
+    let app2 = NSApplication.shared
+    app2.setActivationPolicy(.accessory)
+    for _ in 0..<3 { _ = SystemMonitor.detectFullscreenApp() }   // 预热
+
+    let n = 20
+    let t0 = Date()
+    for _ in 0..<n { _ = SystemMonitor.detectFullscreenApp() }
+    let perCall = Date().timeIntervalSince(t0) / Double(n) * 1000
+    let windowCount = (CGWindowListCopyWindowInfo([.excludeDesktopElements], kCGNullWindowID) as? [[String: Any]])?.count ?? 0
+
+    let t1 = Date()
+    for _ in 0..<2000 { _ = SystemMonitor.currentIdleSeconds() }
+    let idleCall = Date().timeIntervalSince(t1) / 2000 * 1000
+
+    print(String(format: "全屏检测(CGWindowList)：单次 %.1f ms · 当前窗口数 %d", perCall, windowCount))
+    print(String(format: "  按每 2 秒轮询一次 → 平均占 %.1f%% CPU", perCall / 2000 * 100))
+    print(String(format: "空闲检测(CGEventSource)：单次 %.4f ms", idleCall))
+    print(String(format: "  按每 0.5 秒轮询一次 → 平均占 %.3f%% CPU", idleCall / 500 * 100))
+    exit(0)
+}
+
+
+// ── 探针：壁纸刷新（下载 + 解码缩放）的 CPU 成本
+if variant == "probefetch" {
+    let app3 = NSApplication.shared
+    app3.setActivationPolicy(.accessory)
+    func cpu() -> Double {
+        var u = rusage()
+        guard getrusage(RUSAGE_SELF, &u) == 0 else { return 0 }
+        return Double(u.ru_utime.tv_sec) + Double(u.ru_utime.tv_usec)/1e6
+             + Double(u.ru_stime.tv_sec) + Double(u.ru_stime.tv_usec)/1e6
+    }
+    let store = WallpaperStore.shared
+    let t0 = Date(), c0 = cpu()
+    store.refresh(source: .bing, policy: .everyBreak, force: true)
+    let deadline = Date().addingTimeInterval(25)
+    while store.isDownloading && Date() < deadline {
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+    }
+    let wall = Date().timeIntervalSince(t0)
+    let burned = cpu() - c0
+    print(String(format: "壁纸刷新：墙钟 %.1fs · CPU %.2f 秒 · 缓存 %d 张 · 错误 %@",
+                 wall, burned, store.cacheCount, store.lastError ?? "无"))
+    print(String(format: "  若每次长休息（50 分钟）刷新一次 → 平均占用 %.2f%% CPU", burned / (50*60) * 100))
+    exit(0)
+}
+
 let app = NSApplication.shared
 app.setActivationPolicy(.accessory)
 

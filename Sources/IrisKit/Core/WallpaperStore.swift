@@ -99,6 +99,8 @@ public final class WallpaperStore: ObservableObject, @unchecked Sendable {
     private var inflight = false
 
     private let maxEntries = 8
+    /// 上次拉取时间落盘，避免每次启动 App 都重新下载一张大图
+    private static let lastFetchKey = "wallpaperLastFetch"
 
     init(cacheDir: URL? = nil) {
         let base = cacheDir ?? StatsStore.defaultDirectory().appendingPathComponent("Wallpapers", isDirectory: true)
@@ -106,6 +108,12 @@ public final class WallpaperStore: ObservableObject, @unchecked Sendable {
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
         loadManifest()
         loadLatestCached()
+        if let stored = AppSettings.defaults.object(forKey: WallpaperStore.lastFetchKey) as? Date {
+            lastFetch = stored
+        } else {
+            // 老版本没有这个字段：用最新一张缓存的日期兜底
+            lastFetch = entries.max(by: { $0.date < $1.date })?.date ?? .distantPast
+        }
     }
 
     // MARK: - 对外入口
@@ -127,6 +135,7 @@ public final class WallpaperStore: ObservableObject, @unchecked Sendable {
         inflight = true
         isDownloading = true
         lastFetch = Date()
+        AppSettings.defaults.set(lastFetch, forKey: WallpaperStore.lastFetchKey)
 
         WallpaperStore.fetchPayload(source: source) { [weak self] result in
             switch result {
@@ -364,8 +373,11 @@ public final class WallpaperStore: ObservableObject, @unchecked Sendable {
                         completion(.failure(WallpaperError.empty))
                         return
                     }
-                    let uhd = first.urlbase.hasSuffix("_UHD") ? first.urlbase : first.urlbase + "_UHD.jpg"
-                    guard let imageURL = URL(string: "https://www.bing.com" + uhd) else {
+                    // 用 1920×1080 而不是 UHD：浮层上还要模糊+压暗，
+                    // 视觉无差别，但解码量只有 1/4（UHD 解码缩放会烧掉 1–2 秒 CPU）
+                    let base = first.urlbase.replacingOccurrences(of: "_UHD", with: "")
+                    let sized = base.hasSuffix("_1920x1080") ? base : base + "_1920x1080.jpg"
+                    guard let imageURL = URL(string: "https://www.bing.com" + sized) else {
                         completion(.failure(WallpaperError.badResponse("bing image url")))
                         return
                     }
@@ -408,7 +420,7 @@ public final class WallpaperStore: ObservableObject, @unchecked Sendable {
                 do {
                     let items = try JSONDecoder().decode([PicsumItem].self, from: data)
                     guard let picked = items.randomElement(),
-                          let imageURL = URL(string: "https://picsum.photos/id/\(picked.id)/3840/2160") else {
+                          let imageURL = URL(string: "https://picsum.photos/id/\(picked.id)/2560/1440") else {
                         completion(.failure(WallpaperError.empty))
                         return
                     }
