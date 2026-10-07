@@ -233,7 +233,7 @@ public class SchedulerTests
         w.Advance(20 * 60 + 1);
         Assert.True(w.Scheduler.IsPaused, "开会时不该弹提醒");
         Assert.Equal(PauseKind.System, w.Scheduler.PauseState);
-        Assert.Equal(AutoPauseCause.Meeting, w.Scheduler.AutoPauseCause);
+        Assert.Equal(AutoPauseCause.Meeting, w.Scheduler.AutoPause);
 
         w.Status.IsMicrophoneInUse = false;
         w.Scheduler.Tick();
@@ -270,7 +270,7 @@ public class SchedulerTests
 
         w.Advance(20 * 60 + 1);
         Assert.True(w.Scheduler.IsPaused);
-        Assert.Equal(AutoPauseCause.QuietHours, w.Scheduler.AutoPauseCause);
+        Assert.Equal(AutoPauseCause.QuietHours, w.Scheduler.AutoPause);
 
         w.Settings.QuietHoursEnabled = false;
         w.Scheduler.Tick();

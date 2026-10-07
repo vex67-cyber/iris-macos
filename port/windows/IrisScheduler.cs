@@ -277,8 +277,8 @@ public sealed class BreakScheduler
     public int ConsecutivePostpones { get; private set; }
     /// <summary>当前暂停的来源（UI 可据此区分"手动暂停"与"会议中自动暂停"）。</summary>
     public PauseKind PauseState => _pauseKind;
-    /// <summary>自动暂停的原因；不是自动暂停时为 None。</summary>
-    public AutoPauseCause AutoPauseCause { get; private set; }
+    /// <summary>自动暂停的原因；不是自动暂停时为 None。（类型与属性同名易混，故属性取名 AutoPause）</summary>
+    public AutoPauseCause AutoPause { get; private set; }
 
     public event Action<BreakKind, TimeSpan>? BreakWillStart;   // 预告胶囊
     public event Action<BreakKind>? BreakStarted;               // 显示浮层 + 开始音
@@ -376,7 +376,6 @@ public sealed class BreakScheduler
 
         // 微休息即将到点、而长休息就在 90 秒内 → 并入长休息
         var kind = BreakKind.Micro;
-        var due = NextMicroAt;
         if (Now >= NextMicroAt && _settings.LongEnabled && NextLongAt > Now &&
             NextLongAt - Now <= MergeWindow)
         {
@@ -453,13 +452,13 @@ public sealed class BreakScheduler
             if (Phase == PhaseKind.Breaking) FinishBreak(BreakOutcome.Skipped, silent: true);
             Phase = PhaseKind.Paused;
             _pauseKind = PauseKind.System;
-            AutoPauseCause = cause;
+            AutoPause = cause;
             return;
         }
 
         if (_pauseKind == PauseKind.System)
         {
-            AutoPauseCause = AutoPauseCause.None;
+            AutoPause = AutoPauseCause.None;
             _pauseKind = PauseKind.None;
             RescheduleFromNow();
             Phase = PhaseKind.Working;
@@ -612,7 +611,7 @@ public sealed class BreakScheduler
         if (Phase == PhaseKind.Breaking) FinishBreak(BreakOutcome.Skipped, silent: true);
         Phase = PhaseKind.Paused;
         _pauseKind = PauseKind.Manual;
-        AutoPauseCause = AutoPauseCause.None;
+        AutoPause = AutoPauseCause.None;
         _pausedAt = _clock();
         _pausedUntil = duration.HasValue ? _pausedAt + duration.Value : (DateTime?)null;
     }
@@ -640,7 +639,7 @@ public sealed class BreakScheduler
         _pausedAt = default;
         _pausedUntil = null;
         _pauseKind = PauseKind.None;
-        AutoPauseCause = AutoPauseCause.None;
+        AutoPause = AutoPauseCause.None;
         Phase = PhaseKind.Working;
         Now = now;
     }
