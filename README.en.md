@@ -4,7 +4,7 @@
 
 > Give your eyes a moment.
 
-A native macOS break reminder, written by hand in SwiftUI + AppKit. No third-party dependencies, no network calls except for the optional wallpapers.
+A native macOS break reminder built with SwiftUI and AppKit. No third-party dependencies; no network calls except for the optional wallpapers.
 
 ```
 Every 20 minutes of screen time, look at something 20 feet away for at least 20 seconds.
@@ -145,7 +145,7 @@ cd iris-macos
 
 ### Compatibility
 
-The code is written against the macOS 11 API surface and runs on macOS 12 through 27. `Design/Compat.swift` holds every availability shim: `foregroundColor` instead of `foregroundStyle`, a hand-written ticker instead of `TimelineView`, a hand-drawn bar chart instead of Swift Charts, completion-handler networking instead of `async`/`await`, and a LaunchAgent fallback for launch-at-login on macOS 11 and 12.
+The code is written against the macOS 11 API surface and runs on macOS 12 through 27. `Design/Compat.swift` holds every availability shim: `foregroundColor` instead of `foregroundStyle`, its own ticker instead of `TimelineView`, its own bar chart instead of Swift Charts, completion-handler networking instead of `async`/`await`, and a LaunchAgent fallback for launch-at-login on macOS 11 and 12.
 
 The built binary targets macOS 12.0 because the Swift 6.4 toolchain clamps the deployment target there. An older toolchain can go down to 11.
 

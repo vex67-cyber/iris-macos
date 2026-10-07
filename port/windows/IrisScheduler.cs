@@ -9,8 +9,9 @@
 //   · 空闲 = 已经休息过：离开超过阈值回来后给一整轮新周期，绝不"补罚"
 //   · 全屏时缓期，退出全屏后补上；逾期超过一整个周期则直接重排
 //
-// TODO（对齐 macOS 版 1.1）：还要补三条智能判断 —— 开会时自动暂停（麦克风/摄像头占用）、
-// 免打扰时段自动暂停、连续输入时等一个自然停顿。规格见 docs/windows-port-spec.md §3.3.1。
+//   · 根据电脑操作自动判断（对齐 macOS 版 1.1）：开会时自动暂停（麦克风/摄像头占用）、
+//     免打扰时段自动暂停、连续输入时等一个自然停顿
+//     规格见 docs/windows-port-spec.md §3.3.1
 
 using System;
 using System.Collections.Generic;
@@ -24,6 +25,26 @@ public enum BreakKind { Micro, Long }
 public enum BreakOutcome { Completed, Skipped, Postponed }
 
 public enum PhaseKind { Working, Breaking, Paused }
+
+/// <summary>暂停的三种来源。行为不同，移植时不要合并。</summary>
+public enum PauseKind
+{
+    None,
+    /// <summary>用户主动暂停：恢复时按暂停时长平移计时器</summary>
+    Manual,
+    /// <summary>用户关掉了提醒：重新打开时重排一整轮</summary>
+    Disabled,
+    /// <summary>系统判断（开会 / 免打扰时段）：原因消失后重排一整轮</summary>
+    System
+}
+
+/// <summary>自动暂停的原因。文案由 UI 自行本地化（「会议中」/「免打扰时段」）。</summary>
+public enum AutoPauseCause
+{
+    None,
+    Meeting,
+    QuietHours
+}
 
 public enum PauseReason { Manual, Disabled, System }
 
@@ -46,6 +67,23 @@ public sealed class SchedulerSettings
     public bool DeferFullscreen { get; set; } = true;
     public bool RemindersEnabled { get; set; } = true;
 
+    // ── 根据电脑操作自动判断（对齐 macOS 版 1.1）──
+
+    /// <summary>只在「全屏 + 系统正在播放声音」时缓期（默认）。
+    /// 关闭后任何全屏应用都不打扰——包括全屏写代码，那样开发者会永远收不到提醒。</summary>
+    public bool DeferOnlyWhenPlayingMedia { get; set; } = true;
+
+    /// <summary>连续输入（打字）时不硬打断，等一个自然停顿再提醒。</summary>
+    public bool WaitForNaturalPause { get; set; } = true;
+
+    /// <summary>麦克风或摄像头被占用（开会 / 通话）时自动暂停，设备释放后自动恢复。</summary>
+    public bool PauseDuringMeetings { get; set; } = true;
+
+    /// <summary>免打扰时段（例如午休）。支持跨午夜。</summary>
+    public bool QuietHoursEnabled { get; set; }
+    public int QuietStartHour { get; set; } = 12;
+    public int QuietEndHour { get; set; } = 14;
+
     /// <summary>应用中某个节奏预设（与 macOS 版三档预设一致）。</summary>
     public void ApplyPreset(string preset)
     {
@@ -67,13 +105,27 @@ public sealed class SchedulerSettings
     }
 }
 
-/// <summary>系统状态抽象：Windows 上用 GetLastInputInfo / SystemEvents / SHQueryUserNotificationState 实现。</summary>
+/// <summary>
+/// 系统状态抽象。Windows 上的实现方式：
+///   IdleTime        ← GetLastInputInfo()
+///   IsScreenLocked  ← SystemEvents.SessionSwitch
+///   IsSystemAsleep  ← SystemEvents.PowerModeChanged
+///   IsFullscreenApp ← SHQueryUserNotificationState()（QUNS_RUNNING_D3D_FULL_SCREEN / QUNS_PRESENTATION_MODE）
+///   IsAudioPlaying  ← 默认输出设备上 kAudioDevicePropertyDeviceIsRunningSomewhere 的等价物
+///   IsMicrophoneInUse / IsCameraInUse ← 录音设备与摄像头的占用状态（详见规格书 §3.3.1）
+/// 这三项都只读「设备是否在运行」，不涉及内容，因此不需要任何隐私权限。
+/// </summary>
 public interface ISystemStatus
 {
     TimeSpan IdleTime { get; }
     bool IsScreenLocked { get; }
     bool IsSystemAsleep { get; }
     bool IsFullscreenApp { get; }
+
+    // 默认实现：老的状态实现类可以只提供前四项（对应 macOS 版的协议扩展默认值）
+    bool IsAudioPlaying => false;
+    bool IsMicrophoneInUse => false;
+    bool IsCameraInUse => false;
 }
 
 /// <summary>一天的护眼成绩单（与 macOS 版字段一致，便于数据互导）。</summary>
@@ -198,6 +250,10 @@ public sealed class BreakScheduler
     public static readonly TimeSpan MicroPreviewLead = TimeSpan.FromSeconds(10);
     public static readonly TimeSpan LongPreviewLead = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan MergeWindow = TimeSpan.FromSeconds(90);
+    /// <summary>空闲时间低于这个值说明用户正在连续输入（手没停过）。</summary>
+    private static readonly TimeSpan TypingIdleThreshold = TimeSpan.FromSeconds(5);
+    /// <summary>为了等一个自然停顿，最多把提醒推迟这么久。</summary>
+    private static readonly TimeSpan NaturalPauseGrace = TimeSpan.FromSeconds(60);
 
     private readonly SchedulerSettings _settings;
     private readonly StatsStore _stats;
@@ -209,6 +265,7 @@ public sealed class BreakScheduler
     private DateTime _pausedAt;
     private DateTime? _pausedUntil;
     private DateTime? _previewedFor;
+    private PauseKind _pauseKind = PauseKind.None;
 
     public PhaseKind Phase { get; private set; } = PhaseKind.Working;
     public BreakKind? CurrentBreak { get; private set; }
@@ -218,7 +275,10 @@ public sealed class BreakScheduler
     public DateTime? BreakEndsAt { get; private set; }
     public DateTime Now { get; private set; }
     public int ConsecutivePostpones { get; private set; }
-    public string? StatusDetail { get; private set; }
+    /// <summary>当前暂停的来源（UI 可据此区分"手动暂停"与"会议中自动暂停"）。</summary>
+    public PauseKind PauseState => _pauseKind;
+    /// <summary>自动暂停的原因；不是自动暂停时为 None。</summary>
+    public AutoPauseCause AutoPauseCause { get; private set; }
 
     public event Action<BreakKind, TimeSpan>? BreakWillStart;   // 预告胶囊
     public event Action<BreakKind>? BreakStarted;               // 显示浮层 + 开始音
@@ -285,10 +345,12 @@ public sealed class BreakScheduler
     {
         Now = _clock();
         HandleSettingsGate();
+        HandleAutoPauseGate();
 
         if (Phase == PhaseKind.Paused)
         {
-            if (_pausedUntil.HasValue && Now >= _pausedUntil.Value) Resume();
+            if (_pauseKind == PauseKind.Manual && _pausedUntil.HasValue && Now >= _pausedUntil.Value)
+                Resume();
             return;
         }
 
@@ -328,7 +390,15 @@ public sealed class BreakScheduler
             kind = longDue ? BreakKind.Long : BreakKind.Micro;
             var dueAt = kind == BreakKind.Long ? NextLongAt : NextMicroAt;
 
-            if (_settings.DeferFullscreen && _status.IsFullscreenApp)
+            // 正在连续打字时不硬打断：等一个自然停顿再弹，最多等 60 秒
+            if (_settings.WaitForNaturalPause &&
+                _status.IdleTime < TypingIdleThreshold &&
+                Now - dueAt < NaturalPauseGrace)
+            {
+                return;
+            }
+
+            if (ShouldDeferForFullscreen)
             {
                 var grace = kind == BreakKind.Long
                     ? MaxTime(_settings.LongInterval, TimeSpan.FromMinutes(10))
@@ -352,18 +422,81 @@ public sealed class BreakScheduler
     {
         if (!_settings.RemindersEnabled)
         {
-            if (Phase == PhaseKind.Paused && StatusDetail == "disabled") return;
+            if (_pauseKind == PauseKind.Disabled) return;
             if (Phase == PhaseKind.Breaking) FinishBreak(BreakOutcome.Skipped, silent: true);
             Phase = PhaseKind.Paused;
-            StatusDetail = "disabled";
+            _pauseKind = PauseKind.Disabled;
             _pausedAt = Now;
             return;
         }
-        if (Phase == PhaseKind.Paused && StatusDetail == "disabled")
+        if (_pauseKind == PauseKind.Disabled)
         {
+            _pauseKind = PauseKind.None;
             RescheduleFromNow();
-            StatusDetail = null;
             Phase = PhaseKind.Working;
+        }
+    }
+
+    /// <summary>
+    /// 会议与免打扰时段 → 自动暂停；原因消失后自动恢复并重排一整轮。
+    ///
+    /// 与手动暂停的区别：不记录暂停时长，恢复时直接重排——因为开完会 / 午休结束
+    /// 本身就相当于休息过了。手动暂停优先级更高，不会被自动暂停覆盖。
+    /// </summary>
+    private void HandleAutoPauseGate()
+    {
+        var cause = CurrentAutoPauseCause();
+
+        if (cause != AutoPauseCause.None)
+        {
+            if (_pauseKind == PauseKind.System || _pauseKind == PauseKind.Manual) return;
+            if (Phase == PhaseKind.Breaking) FinishBreak(BreakOutcome.Skipped, silent: true);
+            Phase = PhaseKind.Paused;
+            _pauseKind = PauseKind.System;
+            AutoPauseCause = cause;
+            return;
+        }
+
+        if (_pauseKind == PauseKind.System)
+        {
+            AutoPauseCause = AutoPauseCause.None;
+            _pauseKind = PauseKind.None;
+            RescheduleFromNow();
+            Phase = PhaseKind.Working;
+        }
+    }
+
+    private AutoPauseCause CurrentAutoPauseCause()
+    {
+        if (_settings.PauseDuringMeetings && (_status.IsMicrophoneInUse || _status.IsCameraInUse))
+            return AutoPauseCause.Meeting;
+        if (_settings.QuietHoursEnabled && IsInQuietHours(_clock()))
+            return AutoPauseCause.QuietHours;
+        return AutoPauseCause.None;
+    }
+
+    /// <summary>免打扰时段判定，支持跨午夜（例如 22 → 8）。</summary>
+    private bool IsInQuietHours(DateTime date)
+    {
+        var start = _settings.QuietStartHour;
+        var end = _settings.QuietEndHour;
+        if (start == end) return false;
+        var hour = date.Hour;
+        return start < end ? (hour >= start && hour < end) : (hour >= start || hour < end);
+    }
+
+    /// <summary>
+    /// 是否该因为「全屏」而缓期。
+    /// 默认要求「全屏 + 正在播放声音」：全屏写代码、看文档不该被打断，
+    /// 否则用户会永远收不到提醒。
+    /// </summary>
+    private bool ShouldDeferForFullscreen
+    {
+        get
+        {
+            if (!_settings.DeferFullscreen || !_status.IsFullscreenApp) return false;
+            if (!_settings.DeferOnlyWhenPlayingMedia) return true;
+            return _status.IsAudioPlaying;
         }
     }
 
@@ -478,7 +611,8 @@ public sealed class BreakScheduler
         if (Phase == PhaseKind.Paused) return;
         if (Phase == PhaseKind.Breaking) FinishBreak(BreakOutcome.Skipped, silent: true);
         Phase = PhaseKind.Paused;
-        StatusDetail = null;
+        _pauseKind = PauseKind.Manual;
+        AutoPauseCause = AutoPauseCause.None;
         _pausedAt = _clock();
         _pausedUntil = duration.HasValue ? _pausedAt + duration.Value : (DateTime?)null;
     }
@@ -495,16 +629,19 @@ public sealed class BreakScheduler
     {
         if (Phase != PhaseKind.Paused) return;
         var now = _clock();
-        if (_pausedAt != default)
+        // 只有手动暂停才平移计时器（暂停期间时间冻结）；
+        // 关闭提醒 / 开会这类暂停在原因消失时直接重排，不补时长。
+        if (_pauseKind == PauseKind.Manual && _pausedAt != default)
         {
-            var shift = now - _pausedAt;         // 暂停期间计时冻结
+            var shift = now - _pausedAt;
             NextMicroAt += shift;
             NextLongAt += shift;
         }
         _pausedAt = default;
         _pausedUntil = null;
+        _pauseKind = PauseKind.None;
+        AutoPauseCause = AutoPauseCause.None;
         Phase = PhaseKind.Working;
-        StatusDetail = null;
         Now = now;
     }
 

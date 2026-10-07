@@ -893,7 +893,7 @@ struct AboutPane: View {
         }
         .padding(.top, 2)
 
-        Text(L10n.s("© 2026 明目 · 用 SwiftUI 手写，向 Time Out、Stretchly、LookAway 致敬。",
+        Text(L10n.s("© 2026 明目 · 用 SwiftUI 与 AppKit 构建，向 Time Out、Stretchly、LookAway 致敬。",
                     "© 2026 Iris · Hand-built with SwiftUI, inspired by Time Out, Stretchly and LookAway."))
             .font(.system(size: 11))
             .foregroundColor(.secondary.opacity(0.75))

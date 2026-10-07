@@ -23,6 +23,9 @@ internal sealed class StubStatus : ISystemStatus
     public bool IsScreenLocked { get; set; }
     public bool IsSystemAsleep { get; set; }
     public bool IsFullscreenApp { get; set; }
+    public bool IsAudioPlaying { get; set; }
+    public bool IsMicrophoneInUse { get; set; }
+    public bool IsCameraInUse { get; set; }
 }
 
 /// <summary>每个测试一套隔离环境。</summary>
@@ -37,7 +40,10 @@ internal sealed class World
     public World()
     {
         Settings.ApplyPreset("classic");
-        Settings.DeferFullscreen = false;   // 需要时单独打开
+        Settings.DeferFullscreen = false;            // 需要时单独打开
+        Settings.DeferOnlyWhenPlayingMedia = false;  // 同上
+        Settings.WaitForNaturalPause = false;        // 默认关，避免干扰其它用例
+        Settings.PauseDuringMeetings = false;        // 同上
         Settings.PreviewEnabled = false;
         Stats = new StatsStore(null);       // 纯内存，不落盘
         Scheduler = new BreakScheduler(Settings, Stats, Status, () => Clock.Now);
@@ -213,6 +219,134 @@ public class SchedulerTests
         w.Status.IsFullscreenApp = false;
         w.Scheduler.Tick();
         Assert.True(w.Scheduler.IsBreaking, "退出全屏后应补上这次提醒");
+    }
+
+    // ── 自动判断（会议 / 免打扰 / 自然停顿）────────────────────────
+
+    [Fact]
+    public void 开会时自动暂停_散会后自动恢复全新一轮()
+    {
+        var w = new World();
+        w.Settings.PauseDuringMeetings = true;
+        w.Status.IsMicrophoneInUse = true;
+
+        w.Advance(20 * 60 + 1);
+        Assert.True(w.Scheduler.IsPaused, "开会时不该弹提醒");
+        Assert.Equal(PauseKind.System, w.Scheduler.PauseState);
+        Assert.Equal(AutoPauseCause.Meeting, w.Scheduler.AutoPauseCause);
+
+        w.Status.IsMicrophoneInUse = false;
+        w.Scheduler.Tick();
+        Assert.True(w.Scheduler.IsWorking);
+        AssertClose(w.Scheduler.TimeUntilNextBreak.TotalSeconds, 20 * 60);
+    }
+
+    [Fact]
+    public void 摄像头占用也算会议中()
+    {
+        var w = new World();
+        w.Settings.PauseDuringMeetings = true;
+        w.Status.IsCameraInUse = true;
+        w.Advance(20 * 60 + 1);
+        Assert.True(w.Scheduler.IsPaused);
+    }
+
+    [Fact]
+    public void 关掉开会自动暂停后照常提醒()
+    {
+        var w = new World();
+        w.Status.IsMicrophoneInUse = true;   // World 默认已关掉该开关
+        w.Advance(20 * 60 + 1);
+        Assert.True(w.Scheduler.IsBreaking);
+    }
+
+    [Fact]
+    public void 免打扰时段内不提醒_时段结束后恢复()
+    {
+        var w = new World();                 // 时钟起点是今天 10:00
+        w.Settings.QuietHoursEnabled = true;
+        w.Settings.QuietStartHour = 9;
+        w.Settings.QuietEndHour = 11;
+
+        w.Advance(20 * 60 + 1);
+        Assert.True(w.Scheduler.IsPaused);
+        Assert.Equal(AutoPauseCause.QuietHours, w.Scheduler.AutoPauseCause);
+
+        w.Settings.QuietHoursEnabled = false;
+        w.Scheduler.Tick();
+        Assert.True(w.Scheduler.IsWorking);
+    }
+
+    [Fact]
+    public void 免打扰时段支持跨午夜()
+    {
+        var w = new World();
+        w.Settings.QuietHoursEnabled = true;
+        w.Settings.QuietStartHour = 22;
+        w.Settings.QuietEndHour = 8;         // 22:00 – 08:00
+
+        // 起点 10:00 不在时段内 → 正常提醒
+        w.Advance(20 * 60 + 1);
+        Assert.True(w.Scheduler.IsBreaking);
+
+        // 拨到 23:00 → 落在时段内
+        var w2 = new World();
+        w2.Clock.Now = DateTime.Today.AddHours(23);
+        w2.Settings.QuietHoursEnabled = true;
+        w2.Settings.QuietStartHour = 22;
+        w2.Settings.QuietEndHour = 8;
+        w2.Advance(20 * 60 + 1);
+        Assert.True(w2.Scheduler.IsPaused);
+    }
+
+    [Fact]
+    public void 连续打字时不硬打断_手停下来立刻提醒()
+    {
+        var w = new World();
+        w.Settings.WaitForNaturalPause = true;
+
+        w.Status.IdleTime = TimeSpan.Zero;   // 一直在打字
+        w.Advance(20 * 60 + 1);
+        Assert.True(w.Scheduler.IsWorking, "正在打字时应该等一个自然停顿");
+
+        w.Status.IdleTime = TimeSpan.FromSeconds(10);   // 手停了
+        w.Scheduler.Tick();
+        Assert.True(w.Scheduler.IsBreaking);
+    }
+
+    [Fact]
+    public void 自然停顿最多等六十秒()
+    {
+        var w = new World();
+        w.Settings.WaitForNaturalPause = true;
+
+        w.Status.IdleTime = TimeSpan.Zero;
+        w.Advance(20 * 60 + 1);
+        Assert.True(w.Scheduler.IsWorking);
+
+        w.Advance(61);                       // 超过宽限
+        Assert.True(w.Scheduler.IsBreaking);
+    }
+
+    [Fact]
+    public void 全屏写代码照常提醒_全屏且有声音才缓期()
+    {
+        var w = new World();
+        w.Settings.DeferFullscreen = true;
+        w.Settings.DeferOnlyWhenPlayingMedia = true;   // 默认值
+
+        w.Status.IsFullscreenApp = true;
+        w.Status.IsAudioPlaying = false;               // 全屏写代码
+        w.Advance(20 * 60 + 1);
+        Assert.True(w.Scheduler.IsBreaking, "全屏写代码不该被缓期，否则永远收不到提醒");
+
+        var w2 = new World();
+        w2.Settings.DeferFullscreen = true;
+        w2.Settings.DeferOnlyWhenPlayingMedia = true;
+        w2.Status.IsFullscreenApp = true;
+        w2.Status.IsAudioPlaying = true;               // 在看电影
+        w2.Advance(20 * 60 + 1);
+        Assert.True(w2.Scheduler.IsWorking, "看电影时应该缓期");
     }
 
     // ── 暂停 ────────────────────────────────────────────────────────

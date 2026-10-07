@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 手写的堆叠柱状图（不依赖 Swift Charts —— 它需要 macOS 13+）。
+/// 自己实现的堆叠柱状图（不依赖 Swift Charts —— 它需要 macOS 13+）。
 ///
 /// 微休息在下、长休息在上，柱顶标注当日总数。
 public struct IrisBarChart: View {

@@ -4,7 +4,7 @@
 
 > 让眼睛，歇一会儿。
 
-一款原生 macOS 护眼提醒 App。纯 SwiftUI + AppKit 手写，**零第三方依赖**，完全本地运行。
+一款原生 macOS 护眼提醒 App，用 SwiftUI 和 AppKit 编写。**没有任何第三方依赖**，除可选的休息壁纸外不联网。
 
 ```
 每看屏幕 20 分钟，望向 20 英尺（约 6 米）外的地方，至少 20 秒。
@@ -222,4 +222,4 @@ Esc 推迟优先于跳过、关闭提醒只是暂停而不是卸载。
 
 MIT License。图标、代码均为本项目原创。
 
-© 2026 明目 · 用 SwiftUI 手写，向 Time Out、Stretchly、LookAway 致敬。
+© 2026 明目 · 用 SwiftUI 与 AppKit 构建，向 Time Out、Stretchly、LookAway 致敬。
