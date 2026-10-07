@@ -74,15 +74,26 @@
 
 ## 安装
 
-### 从源码构建（当前唯一方式）
+### 下载 DMG（推荐）
+
+👉 **[下载最新版](https://github.com/vex67-cyber/iris-macos/releases/latest)** · `Mingmu-1.0.0.dmg` · 3.4 MB · 需要 macOS 12+ · Apple Silicon
+
+1. 双击打开 DMG，把「明目」拖进「应用程序」文件夹
+2. 首次打开请**右键点图标 → 打开**（应用未做 Apple 公证，直接双击会被 Gatekeeper 拦下；之后就能正常双击了）
+3. 若仍提示无法验证，执行一次：`xattr -dr com.apple.quarantine /Applications/明目.app`
+
+> Intel 芯片的 Mac 请用下面的源码构建方式（本项目自带编译脚本）。
+
+### 从源码构建（Intel Mac / 开发者）
 
 需要 macOS 12+ 与 Xcode Command Line Tools。
 
 ```bash
-git clone <this-repo> iris && cd iris
+git clone https://github.com/vex67-cyber/iris-macos.git && cd iris-macos
 
 ./scripts/build-app.sh          # 编译 → 生成图标 → 组装 .app → 签名
 ./scripts/install.sh --open     # 安装到「应用程序」并启动
+./scripts/make-dmg.sh           # 打包成可分发的 DMG（含拖拽安装界面）
 ```
 
 构建产物在 `dist/明目.app`，可以直接双击运行或拖进「应用程序」。
