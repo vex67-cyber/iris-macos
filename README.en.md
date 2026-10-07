@@ -185,6 +185,12 @@ Both were found by measuring, not by reading:
 1. **The settings window used to burn 46% CPU.** It observed the scheduler, whose 0.5-second heartbeat re-rendered the whole window — including a blurred 4K wallpaper preview — twice a second. No view in the settings window needs that heartbeat.
 2. **After any break, the app kept burning 10% CPU forever.** The decorative glow behind the break overlay used a `repeatForever` implicit animation. Once the overlay was dismissed, SwiftUI's animation engine kept ticking at 60fps; the leaked view tree also held the wallpaper image, doubling memory. Driving the drift from the same 1-second heartbeat fixed both: 10% → 0%, and 90 MB → 45 MB.
 
+### Testing and CI
+
+- **36 unit tests** (swift-testing) cover the scheduler's time logic: idle reset, fullscreen deferral, meeting auto-pause, quiet hours, waiting for a typing pause, postpone and skip limits, cross-midnight windows, break previews, and stats recording. They inject a controllable clock and a stub monitor, so nothing depends on wall-clock time passing — and none of them fall over at midnight.
+- **GitHub Actions** builds in release mode, runs the tests, checks the app bundle layout, then packages a DMG and runs `hdiutil verify`, on every push. Pushing a `v*` tag builds and publishes the DMG automatically.
+- The app icon is drawn directly in `scripts/make-icon.swift` with CoreGraphics: a superellipse (exponent 5) on a 1024 canvas with 824 of content. The 16px and 32px sizes are redrawn with heavier strokes and a larger glyph — scaling the 1024 version down turns it into mush.
+
 ### Known limitations
 
 - Not notarized, so the first launch needs a right-click → Open (or one `xattr` command).
@@ -199,7 +205,7 @@ Both were found by measuring, not by reading:
 There isn't one yet, but the repository contains everything needed to build it:
 
 - [`docs/windows-port-spec.md`](docs/windows-port-spec.md) — behaviour spec, Windows API mapping (tray, fullscreen overlay, idle detection, hotkeys), UI spec, design tokens, copy, acceptance checklist and an effort estimate
-- [`port/windows/`](port/windows/) — a **C# reference implementation of the scheduler** with 20 equivalent unit tests, ready to drop into a .NET project
+- [`port/windows/`](port/windows/) — a **C# reference implementation of the scheduler** with 29 equivalent unit tests, ready to drop into a .NET project
 
 The reference code was translated from the tested Swift version but has not been compiled on Windows (no .NET SDK on the machine it was written on) — that's stated prominently in the files themselves. Run the tests first.
 

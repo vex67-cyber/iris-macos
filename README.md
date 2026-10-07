@@ -185,6 +185,16 @@ swift build --sdk /Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk
 - **实际产物为 macOS 12+**：Swift 6.4 工具链把最低部署目标钳制在 12.0，换旧工具链可下探到 11
 - **macOS 26 / 27 已在真机验证**：编译、运行、壁纸下载、菜单栏全部正常
 
+### 测试与持续集成
+
+- **36 个单元测试**（`swift-testing`）覆盖调度器的全部时间逻辑：空闲重置、全屏缓期、
+  开会自动暂停、免打扰时段、连续输入等待停顿、推迟与跳过的上限、跨午夜时段、
+  休息预告、统计写入。测试注入可控时钟与桩监听，不依赖真实时间流逝，也不会在午夜翻车
+- **GitHub Actions**：每次推送自动编译（release）、跑测试、校验 App 结构，
+  再打包 DMG 并 `hdiutil verify`；打 `v*` 标签会自动构建并发布 DMG
+- 图标由 `scripts/make-icon.swift` 用 CoreGraphics 直接画：超椭圆（指数 5），
+  1024 画布 / 824 内容；16px 与 32px 另画一版（笔画更粗、字号更大）——照 1024 缩下去会糊成一团
+
 ### 已知限制
 
 - 开机自启使用 `SMAppService`（macOS 13+）；ad-hoc 签名下系统可能要求在
@@ -200,7 +210,7 @@ swift build --sdk /Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk
 目前还没有。但仓库里备好了一份**完整的移植规格书**：
 
 - [`docs/windows-port-spec.md`](docs/windows-port-spec.md) —— 行为规格、平台 API 映射、UI 规格、设计 token、验收清单、工作量估算
-- [`port/windows/`](port/windows/) —— **C# 调度器参考实现 + 20 个等价单元测试**，可直接拷进 .NET 工程
+- [`port/windows/`](port/windows/) —— **C# 调度器参考实现 + 29 个等价单元测试**，可直接拷进 .NET 工程
 
 任何人在 Windows 上用 .NET（WPF/WinUI）照着实现，即可 1:1 还原行为。
 
