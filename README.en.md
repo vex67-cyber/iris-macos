@@ -43,6 +43,9 @@ All screenshots are rendered offscreen by `swift run IrisSnapshot`, so they show
 
 - **Away means rested.** If you leave the keyboard for more than 2 minutes, that counts as a break. When you come back you start a fresh cycle — the app never "catches up" on missed reminders.
 - **Fullscreen deferral.** Watching a movie or playing a game fullscreen defers the reminder until you're done. It only counts as "media" when audio is actually playing, so fullscreen coding or reading still gets reminders — otherwise developers would never see one.
+- **Meetings pause it automatically.** If the microphone or camera is in use, reminders pause and resume by themselves afterwards. Detecting this needs no permissions — it reads device state, not content.
+- **Quiet hours.** Set a window (lunch, for instance) during which nothing interrupts you. Ranges work across midnight.
+- **No interrupting mid-typing.** If you've been typing continuously, the app waits for a natural pause — up to 60 seconds — before showing a break.
 - **Gentle mode by default.** The overlay never takes keyboard focus, so you can keep typing. A "focus mode" option takes over the keyboard instead.
 - **Heads-up first.** 10 seconds before a micro break (30 for a long one), a small capsule appears at the top of the screen with a countdown and a "start now" button.
 
